@@ -26,7 +26,8 @@ const MPESA_NAME = "Kimm's Beauty Parlour";
 const MPESA_GREEN = "#4CAF50";
 const STAFF_PIN = "1234";
 
-const SERVICES = [
+// Services loaded from Supabase — see POSApp state
+const DEFAULT_SERVICES = [
   { id:"SRV001", cat:"Hair",   name:"Hair wash & blow dry",  price:1000 },
   { id:"SRV002", cat:"Hair",   name:"Hair cutting",           price:800  },
   { id:"SRV003", cat:"Hair",   name:"Hair styling",           price:1500 },
@@ -287,6 +288,20 @@ function BookingPage(){
   const [done,setDone]=useState(false); const [saving,setSaving]=useState(false);
   const [showMpesa,setShowMpesa]=useState(false); const [savedBooking,setSavedBooking]=useState(null);
   const [paymentStatus,setPaymentStatus]=useState(null);
+  const [bookingServices,setBookingServices]=useState(DEFAULT_SERVICES);
+  const [bookingStaff,setBookingStaff]=useState(DEFAULT_STAFF);
+
+  useEffect(()=>{
+    async function loadBookingData(){
+      const [sv,st] = await Promise.all([
+        db("GET","services",null,"?active=eq.true&order=cat.asc,name.asc"),
+        db("GET","staff",null,"?active=eq.true&order=created_at.asc"),
+      ]);
+      if(sv&&sv.length>0) setBookingServices(sv);
+      if(st&&st.length>0) setBookingStaff(st);
+    }
+    loadBookingData();
+  },[]);
 
   async function confirm(){
     if(!sel.name||!sel.phone) return alert("Please enter your name and phone number");
@@ -360,7 +375,7 @@ function BookingPage(){
             {CATS.filter(c=>c!=="All").map(cat=>(
               <div key={cat} style={{marginBottom:16}}>
                 <div style={{fontSize:11,fontWeight:800,color:GOLD_LT,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:8}}>{cat}</div>
-                {SERVICES.filter(s=>s.cat===cat).map(s=>(
+                {bookingServices.filter(s=>s.cat===cat).map(s=>(
                   <div key={s.id} onClick={()=>{setSel(p=>({...p,service:s}));setStep(2);}}
                     style={{background:"rgba(255,255,255,0.05)",borderRadius:10,padding:"12px 14px",marginBottom:6,display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer",border:`1.5px solid ${sel.service?.id===s.id?GOLD:"rgba(255,255,255,0.1)"}`}}>
                     <span style={{fontSize:14,fontWeight:600,color:WHITE}}>{s.name}</span>
@@ -374,7 +389,7 @@ function BookingPage(){
         {step===2&&(
           <div>
             <div style={{fontWeight:800,fontSize:16,color:WHITE,marginBottom:14}}>Choose your stylist</div>
-            {[...staffList,{id:"any",name:"Any available",role:"We'll assign the best match"}].map(s=>(
+            {[...bookingStaff,{id:"any",name:"Any available",role:"We'll assign the best match"}].map(s=>(
               <div key={s.id} onClick={()=>{setSel(p=>({...p,stylist:s.name}));setStep(3);}}
                 style={{background:"rgba(255,255,255,0.05)",borderRadius:12,padding:"14px 16px",marginBottom:10,cursor:"pointer",border:`1.5px solid ${sel.stylist===s.name?GOLD:"rgba(255,255,255,0.1)"}`,display:"flex",alignItems:"center",gap:12}}>
                 <div style={{width:40,height:40,borderRadius:"50%",background:`linear-gradient(135deg,${BLACK},#2C1F00)`,border:`1.5px solid ${GOLD_DIM}`,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,color:GOLD_LT,fontSize:14,flexShrink:0}}>{s.name[0]}</div>
@@ -445,10 +460,14 @@ function POSApp({ onLogout }){
   const [appointments,setAppointments]=useState([]);
   const [customers,setCustomers]=useState([]);
   const [staffList,setStaffList]=useState(DEFAULT_STAFF);
+  const [servicesList,setServicesList]=useState(DEFAULT_SERVICES);
   const [loading,setLoading]=useState(true);
   const [showAddStaff,setShowAddStaff]=useState(false);
   const [editingStaff,setEditingStaff]=useState(null);
   const [newStaff,setNewStaff]=useState({name:"",role:"Stylist",commission_pct:40});
+  const [showAddService,setShowAddService]=useState(false);
+  const [editingService,setEditingService]=useState(null);
+  const [newService,setNewService]=useState({name:"",cat:"Hair",price:""});
 
   const [receipt,setReceipt]=useState(null);
   const [showFeedback,setShowFeedback]=useState(false);
@@ -458,18 +477,20 @@ function POSApp({ onLogout }){
 
   useEffect(()=>{
     async function loadAll(){
-      const [s,p,f,c,st] = await Promise.all([
+      const [s,p,f,c,st,sv] = await Promise.all([
         db("GET","sales",null,"?order=created_at.desc"),
         db("GET","stock",null,""),
         db("GET","feedback",null,"?order=created_at.desc"),
         db("GET","customers",null,"?order=created_at.desc"),
         db("GET","staff",null,"?active=eq.true&order=created_at.asc"),
+        db("GET","services",null,"?active=eq.true&order=cat.asc,name.asc"),
       ]);
       if(s) setSales(s);
       if(p) setProducts(p);
       if(f) setFeedbacks(f);
       if(c) setCustomers(c);
       if(st&&st.length>0) setStaffList(st);
+      if(sv&&sv.length>0) setServicesList(sv);
       setLoading(false);
     }
     loadAll();
@@ -553,7 +574,7 @@ function POSApp({ onLogout }){
     }
     if(customer) setCustomers(p=>p.find(c=>c.id===customer.id)?p:[customer,...p]);
     // Find service from SERVICES list
-    const svc = SERVICES.find(s=>s.name===a.service);
+    const svc = servicesList.find(s=>s.name===a.service);
     const cartItem = svc ? [{...svc,type:"service",qty:1}] : [];
     // Pre-fill POS
     setSelectedCustomer(customer||{name:a.name,phone:a.phone});
@@ -575,19 +596,24 @@ function POSApp({ onLogout }){
     if(!clientName) return alert("Please enter or select a client");
     if(!selStaff) return alert("Please select a stylist");
     if(cart.length===0) return alert("Cart is empty");
-    const saleData={client:clientName,stylist:selStaff,items:cart,total:cartTotal,commission,payment:payMethod,date:todayStr(),time:nowTime()};
-    const saved = await db("POST","sales",saleData);
-    const newSale = saved?.[0]||{...saleData,id:"S"+Date.now()};
-    setSales(p=>[newSale,...p]);
-    for(const ci of cart.filter(i=>i.type==="product")){
-      const prod=products.find(p=>p.id===ci.id);
-      if(prod){ const ns=Math.max(0,prod.stock-ci.qty); await db("PATCH","stock",{stock:ns},`?id=eq.${ci.id}`); setProducts(p=>p.map(pr=>pr.id===ci.id?{...pr,stock:ns}:pr)); }
+    try {
+      const saleData={client:clientName,stylist:selStaff,items:cart,total:cartTotal,commission,payment:payMethod,date:todayStr(),time:nowTime()};
+      const saved = await db("POST","sales",saleData);
+      const newSale = saved?.[0]||{...saleData,id:"S"+Date.now()};
+      setSales(p=>[newSale,...p]);
+      for(const ci of cart.filter(i=>i.type==="product")){
+        const prod=products.find(p=>p.id===ci.id);
+        if(prod){ const ns=Math.max(0,prod.stock-ci.qty); await db("PATCH","stock",{stock:ns},`?id=eq.${ci.id}`); setProducts(p=>p.map(pr=>pr.id===ci.id?{...pr,stock:ns}:pr)); }
+      }
+      await updateCustomerAfterSale(cartTotal);
+      setReceipt(newSale);
+      setCart([]); setClientName(""); setClientPhone(""); setSelStaff(""); setPayMethod("M-Pesa");
+      setSelectedCustomer(null); setCustomerSearch(""); setAddingNewCustomer(false);
+      setShowFeedback(true); setShowMpesaConfirm(false);
+    } catch(err) {
+      console.error("Sale error:",err);
+      alert("Something went wrong. Please try again.");
     }
-    await updateCustomerAfterSale(cartTotal);
-    setReceipt(newSale);
-    setCart([]); setClientName(""); setClientPhone(""); setSelStaff(""); setPayMethod("M-Pesa");
-    setSelectedCustomer(null); setCustomerSearch(""); setAddingNewCustomer(false);
-    setShowFeedback(true); setShowMpesaConfirm(false);
   }
 
   function checkout(){
@@ -626,6 +652,7 @@ function POSApp({ onLogout }){
     {id:"customers",    label:"Clients",   icon:"👤"},
     {id:"dashboard",    label:"Overview",  icon:"📊"},
     {id:"staff",        label:"Staff",     icon:"👥"},
+    {id:"services",     label:"Services",  icon:"✂"},
     {id:"inventory",    label:"Stock",     icon:"📦"},
   ];
 
@@ -778,7 +805,7 @@ function POSApp({ onLogout }){
 
             {/* Items grid */}
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:16}}>
-              {(typeFilter==="services"?SERVICES.filter(s=>catFilter==="All"||s.cat===catFilter):products.filter(p=>catFilter==="All"||p.cat===catFilter)).map(item=>(
+              {(typeFilter==="services"?servicesList.filter(s=>catFilter==="All"||s.cat===catFilter):products.filter(p=>catFilter==="All"||p.cat===catFilter)).map(item=>(
                 <div key={item.id} onClick={()=>addToCart(item,typeFilter==="services"?"service":"product")}
                   style={{background:WHITE,borderRadius:12,padding:"12px 10px",cursor:"pointer",border:`1.5px solid ${GOLD_DIM}44`,boxShadow:`0 1px 6px rgba(201,168,76,0.06)`}}>
                   <div style={{fontSize:12,fontWeight:700,color:DARK,marginBottom:4,lineHeight:1.3}}>{item.name}</div>
@@ -1164,6 +1191,93 @@ function POSApp({ onLogout }){
                 )}
               </div>
             ))}
+          </div>
+        )}
+        {/* ── SERVICES ── */}
+        {page==="services"&&(
+          <div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+              <div style={{fontWeight:900,fontSize:18,color:DARK}}>Services</div>
+              <GoldBtn onClick={()=>{setShowAddService(true);setNewService({name:"",cat:"Hair",price:""});}} style={{padding:"8px 16px",fontSize:12}}>+ Add Service</GoldBtn>
+            </div>
+
+            {/* Add service form */}
+            {showAddService&&(
+              <div style={{background:WHITE,borderRadius:14,padding:16,marginBottom:16,border:`1.5px solid ${GOLD}`,boxShadow:`0 2px 16px rgba(201,168,76,0.15)`}}>
+                <div style={{fontWeight:800,fontSize:14,color:DARK,marginBottom:12}}>New Service</div>
+                <input placeholder="Service name" value={newService.name} onChange={e=>setNewService(p=>({...p,name:e.target.value}))}
+                  style={{width:"100%",borderRadius:10,border:`1.5px solid ${GOLD_DIM}`,padding:"10px 12px",fontSize:13,fontFamily:"inherit",outline:"none",boxSizing:"border-box",marginBottom:8}}/>
+                <select value={newService.cat} onChange={e=>setNewService(p=>({...p,cat:e.target.value}))}
+                  style={{width:"100%",borderRadius:10,border:`1.5px solid ${GOLD_DIM}`,padding:"10px 12px",fontSize:13,fontFamily:"inherit",outline:"none",boxSizing:"border-box",marginBottom:8}}>
+                  <option>Hair</option><option>Nails</option><option>Beauty</option><option>Spa</option><option>Barber</option>
+                </select>
+                <input placeholder="Price (KES)" type="number" value={newService.price} onChange={e=>setNewService(p=>({...p,price:e.target.value}))}
+                  style={{width:"100%",borderRadius:10,border:`1.5px solid ${GOLD_DIM}`,padding:"10px 12px",fontSize:13,fontFamily:"inherit",outline:"none",boxSizing:"border-box",marginBottom:12}}/>
+                <div style={{display:"flex",gap:8}}>
+                  <GoldBtn onClick={async()=>{
+                    if(!newService.name||!newService.price) return alert("Please enter service name and price");
+                    const saved = await db("POST","services",{...newService,price:parseInt(newService.price),active:true});
+                    const ns = saved?.[0]||{...newService,price:parseInt(newService.price),id:Date.now()};
+                    setServicesList(p=>[...p,ns]);
+                    setShowAddService(false);
+                    setNewService({name:"",cat:"Hair",price:""});
+                  }} style={{flex:1,padding:"10px 0",fontSize:13}}>Save Service</GoldBtn>
+                  <button onClick={()=>setShowAddService(false)} style={{flex:1,background:"none",border:`1px solid ${GOLD_DIM}`,borderRadius:10,padding:"10px 0",fontSize:13,color:GOLD_DIM,cursor:"pointer",fontWeight:700}}>Cancel</button>
+                </div>
+              </div>
+            )}
+
+            {/* Services grouped by category */}
+            {CATS.filter(c=>c!=="All").map(cat=>{
+              const catServices = servicesList.filter(s=>s.cat===cat);
+              if(catServices.length===0) return null;
+              return(
+                <div key={cat} style={{marginBottom:16}}>
+                  <div style={{fontSize:11,fontWeight:800,color:GOLD_DIM,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:8,paddingLeft:4}}>{cat}</div>
+                  {catServices.map(s=>(
+                    <div key={s.id} style={{background:WHITE,borderRadius:12,padding:"12px 14px",marginBottom:6,border:`1px solid ${GOLD_DIM}33`}}>
+                      {editingService?.id===s.id?(
+                        <div>
+                          <input value={editingService.name} onChange={e=>setEditingService(p=>({...p,name:e.target.value}))}
+                            style={{width:"100%",borderRadius:10,border:`1.5px solid ${GOLD}`,padding:"9px 12px",fontSize:13,fontFamily:"inherit",outline:"none",boxSizing:"border-box",marginBottom:8}}/>
+                          <div style={{display:"flex",gap:8,marginBottom:8}}>
+                            <select value={editingService.cat} onChange={e=>setEditingService(p=>({...p,cat:e.target.value}))}
+                              style={{flex:1,borderRadius:10,border:`1.5px solid ${GOLD_DIM}`,padding:"9px 12px",fontSize:13,fontFamily:"inherit",outline:"none"}}>
+                              <option>Hair</option><option>Nails</option><option>Beauty</option><option>Spa</option><option>Barber</option>
+                            </select>
+                            <input type="number" value={editingService.price} onChange={e=>setEditingService(p=>({...p,price:parseInt(e.target.value)||0}))}
+                              style={{flex:1,borderRadius:10,border:`1.5px solid ${GOLD_DIM}`,padding:"9px 12px",fontSize:13,fontFamily:"inherit",outline:"none"}}/>
+                          </div>
+                          <div style={{display:"flex",gap:8}}>
+                            <GoldBtn onClick={async()=>{
+                              await db("PATCH","services",{name:editingService.name,cat:editingService.cat,price:editingService.price},`?id=eq.${editingService.id}`);
+                              setServicesList(p=>p.map(x=>x.id===editingService.id?{...x,...editingService}:x));
+                              setEditingService(null);
+                            }} style={{flex:1,padding:"8px 0",fontSize:12}}>Save</GoldBtn>
+                            <button onClick={()=>setEditingService(null)} style={{flex:1,background:"none",border:`1px solid ${GOLD_DIM}`,borderRadius:10,padding:"8px 0",fontSize:12,color:GOLD_DIM,cursor:"pointer",fontWeight:700}}>Cancel</button>
+                          </div>
+                        </div>
+                      ):(
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                          <div>
+                            <div style={{fontSize:13,fontWeight:700,color:DARK}}>{s.name}</div>
+                            <div style={{fontSize:12,fontWeight:900,color:GOLD_DIM,marginTop:2}}>{fmt(s.price)}</div>
+                          </div>
+                          <div style={{display:"flex",gap:6}}>
+                            <button onClick={()=>setEditingService({...s})} style={{background:CREAM,border:`1px solid ${GOLD_DIM}`,borderRadius:8,padding:"6px 10px",fontSize:11,color:GOLD_DIM,cursor:"pointer",fontWeight:700}}>✏️ Edit</button>
+                            <button onClick={async()=>{
+                              if(!window.confirm(`Remove ${s.name}?`)) return;
+                              await db("PATCH","services",{active:false},`?id=eq.${s.id}`);
+                              setServicesList(p=>p.filter(x=>x.id!==s.id));
+                            }} style={{background:"#FEE2E2",border:"none",borderRadius:8,padding:"6px 10px",fontSize:11,color:RED,cursor:"pointer",fontWeight:700}}>Remove</button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
           </div>
         )}
         {/* ── INVENTORY ── */}
