@@ -51,10 +51,11 @@ const SERVICES = [
   { id:"SRV022", cat:"Barber", name:"Beard grooming",         price:300  },
 ];
 
-const STAFF = [
-  { id:"STF001", name:"Lucy",   role:"Stylist" },
-  { id:"STF002", name:"Kelvin", role:"Barber" },
-  { id:"STF003", name:"Alex",   role:"Nail Technician" },
+// Staff loaded dynamically from Supabase — see POSApp state
+const DEFAULT_STAFF = [
+  { id:"STF001", name:"Lucy",   role:"Stylist",   commission_pct:40, active:true },
+  { id:"STF002", name:"Kelvin", role:"Barber",    commission_pct:40, active:true },
+  { id:"STF003", name:"Alex",   role:"Nail Technician", commission_pct:40, active:true },
 ];
 
 const CATS = ["All","Hair","Nails","Beauty","Spa","Barber"];
@@ -373,7 +374,7 @@ function BookingPage(){
         {step===2&&(
           <div>
             <div style={{fontWeight:800,fontSize:16,color:WHITE,marginBottom:14}}>Choose your stylist</div>
-            {[...STAFF,{id:"any",name:"Any available",role:"We'll assign the best match"}].map(s=>(
+            {[...staffList,{id:"any",name:"Any available",role:"We'll assign the best match"}].map(s=>(
               <div key={s.id} onClick={()=>{setSel(p=>({...p,stylist:s.name}));setStep(3);}}
                 style={{background:"rgba(255,255,255,0.05)",borderRadius:12,padding:"14px 16px",marginBottom:10,cursor:"pointer",border:`1.5px solid ${sel.stylist===s.name?GOLD:"rgba(255,255,255,0.1)"}`,display:"flex",alignItems:"center",gap:12}}>
                 <div style={{width:40,height:40,borderRadius:"50%",background:`linear-gradient(135deg,${BLACK},#2C1F00)`,border:`1.5px solid ${GOLD_DIM}`,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,color:GOLD_LT,fontSize:14,flexShrink:0}}>{s.name[0]}</div>
@@ -443,7 +444,11 @@ function POSApp({ onLogout }){
   const [feedbacks,setFeedbacks]=useState([]);
   const [appointments,setAppointments]=useState([]);
   const [customers,setCustomers]=useState([]);
+  const [staffList,setStaffList]=useState(DEFAULT_STAFF);
   const [loading,setLoading]=useState(true);
+  const [showAddStaff,setShowAddStaff]=useState(false);
+  const [editingStaff,setEditingStaff]=useState(null);
+  const [newStaff,setNewStaff]=useState({name:"",role:"Stylist",commission_pct:40});
 
   const [receipt,setReceipt]=useState(null);
   const [showFeedback,setShowFeedback]=useState(false);
@@ -453,16 +458,18 @@ function POSApp({ onLogout }){
 
   useEffect(()=>{
     async function loadAll(){
-      const [s,p,f,c] = await Promise.all([
+      const [s,p,f,c,st] = await Promise.all([
         db("GET","sales",null,"?order=created_at.desc"),
         db("GET","stock",null,""),
         db("GET","feedback",null,"?order=created_at.desc"),
         db("GET","customers",null,"?order=created_at.desc"),
+        db("GET","staff",null,"?active=eq.true&order=created_at.asc"),
       ]);
       if(s) setSales(s);
       if(p) setProducts(p);
       if(f) setFeedbacks(f);
       if(c) setCustomers(c);
+      if(st&&st.length>0) setStaffList(st);
       setLoading(false);
     }
     loadAll();
@@ -554,7 +561,7 @@ function POSApp({ onLogout }){
     setClientPhone(a.phone||"");
     setCustomerSearch(a.name);
     setCart(cartItem);
-    setSelStaff(STAFF.find(s=>s.name===a.stylist)?.name||"");
+    setSelStaff(staffList.find(s=>s.name===a.stylist)?.name||"");
     setPage("pos");
   }
 
@@ -607,7 +614,7 @@ function POSApp({ onLogout }){
   const todayRevenue=todaySales.reduce((s,x)=>s+x.total,0);
   const todayCommission=todaySales.reduce((s,x)=>s+x.commission,0);
   const lowStock=products.filter(p=>p.stock<=5);
-  const staffStats=STAFF.map(st=>{ const mySales=sales.filter(s=>s.stylist===st.name); return{...st,salesCount:mySales.length,revenue:mySales.reduce((s,x)=>s+x.total,0),commission:mySales.reduce((s,x)=>s+x.commission,0)}; });
+  const staffStats=staffList.map(st=>{ const mySales=sales.filter(s=>s.stylist===st.name); return{...st,salesCount:mySales.length,revenue:mySales.reduce((s,x)=>s+x.total,0),commission:mySales.reduce((s,x)=>s+x.commission,0)}; });
   const avgRating=feedbacks.length?(feedbacks.reduce((s,f)=>s+f.rating,0)/feedbacks.length).toFixed(1):"—";
   const pendingCount=appointments.filter(a=>a.status==="pending").length;
   const frequentCustomers=customers.filter(c=>c.visit_count>=4);
@@ -749,7 +756,7 @@ function POSApp({ onLogout }){
               <div style={{fontSize:11,fontWeight:800,color:GOLD_DIM,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:6}}>Stylist</div>
               <select value={selStaff} onChange={e=>setSelStaff(e.target.value)} style={{...inputStyle,width:"100%",color:selStaff?DARK:"#aaa"}}>
                 <option value="">Select stylist</option>
-                {STAFF.map(s=><option key={s.id} value={s.name}>{s.name} · {s.role}</option>)}
+                {staffList.map(s=><option key={s.id} value={s.name}>{s.name} · {s.role}</option>)}
               </select>
             </div>
 
@@ -1065,29 +1072,100 @@ function POSApp({ onLogout }){
         {/* ── STAFF ── */}
         {page==="staff"&&(
           <div>
-            <div style={{fontWeight:900,fontSize:18,color:DARK,marginBottom:16}}>Staff & Commissions</div>
-            {staffStats.map(s=>(
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+              <div style={{fontWeight:900,fontSize:18,color:DARK}}>Staff & Commissions</div>
+              <GoldBtn onClick={()=>{setShowAddStaff(true);setNewStaff({name:"",role:"Stylist",commission_pct:40});}} style={{padding:"8px 16px",fontSize:12}}>+ Add Staff</GoldBtn>
+            </div>
+
+            {/* Add staff form */}
+            {showAddStaff&&(
+              <div style={{background:WHITE,borderRadius:14,padding:16,marginBottom:16,border:`1.5px solid ${GOLD}`,boxShadow:`0 2px 16px rgba(201,168,76,0.15)`}}>
+                <div style={{fontWeight:800,fontSize:14,color:DARK,marginBottom:12}}>New Staff Member</div>
+                <input placeholder="Full name" value={newStaff.name} onChange={e=>setNewStaff(p=>({...p,name:e.target.value}))}
+                  style={{width:"100%",borderRadius:10,border:`1.5px solid ${GOLD_DIM}`,padding:"10px 12px",fontSize:13,fontFamily:"inherit",outline:"none",boxSizing:"border-box",marginBottom:8}}/>
+                <select value={newStaff.role} onChange={e=>setNewStaff(p=>({...p,role:e.target.value}))}
+                  style={{width:"100%",borderRadius:10,border:`1.5px solid ${GOLD_DIM}`,padding:"10px 12px",fontSize:13,fontFamily:"inherit",outline:"none",boxSizing:"border-box",marginBottom:8}}>
+                  <option>Stylist</option>
+                  <option>Barber</option>
+                  <option>Nail Technician</option>
+                  <option>Makeup Artist</option>
+                  <option>Receptionist</option>
+                </select>
+                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+                  <span style={{fontSize:12,color:"#888",whiteSpace:"nowrap"}}>Commission %:</span>
+                  <input type="number" value={newStaff.commission_pct} onChange={e=>setNewStaff(p=>({...p,commission_pct:parseInt(e.target.value)||0}))}
+                    style={{flex:1,borderRadius:10,border:`1.5px solid ${GOLD_DIM}`,padding:"10px 12px",fontSize:13,fontFamily:"inherit",outline:"none"}}/>
+                </div>
+                <div style={{display:"flex",gap:8}}>
+                  <GoldBtn onClick={async()=>{
+                    if(!newStaff.name) return alert("Please enter staff name");
+                    const saved = await db("POST","staff",{...newStaff,active:true});
+                    const ns = saved?.[0]||{...newStaff,id:Date.now()};
+                    setStaffList(p=>[...p,ns]);
+                    setShowAddStaff(false);
+                    setNewStaff({name:"",role:"Stylist",commission_pct:40});
+                  }} style={{flex:1,padding:"10px 0",fontSize:13}}>Save Staff</GoldBtn>
+                  <button onClick={()=>setShowAddStaff(false)} style={{flex:1,background:"none",border:`1px solid ${GOLD_DIM}`,borderRadius:10,padding:"10px 0",fontSize:13,color:GOLD_DIM,cursor:"pointer",fontWeight:700}}>Cancel</button>
+                </div>
+              </div>
+            )}
+
+            {/* Staff list */}
+            {staffStats.map((s,idx)=>(
               <div key={s.id} style={{background:WHITE,borderRadius:14,padding:16,marginBottom:12,border:`1px solid ${GOLD_DIM}44`}}>
-                <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:12}}>
-                  <div style={{width:44,height:44,borderRadius:"50%",background:`linear-gradient(135deg,${BLACK},#2C1F00)`,border:`2px solid ${GOLD}`,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,color:GOLD_LT,fontSize:18}}>{s.name[0]}</div>
+                {editingStaff?.id===s.id?(
                   <div>
-                    <div style={{fontWeight:800,fontSize:15,color:DARK}}>{s.name}</div>
-                    <div style={{fontSize:12,color:"#888"}}>{s.role}</div>
-                  </div>
-                </div>
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
-                  {[{label:"Services",value:s.salesCount},{label:"Revenue",value:fmt(s.revenue)},{label:"Commission",value:fmt(s.commission)}].map((m,i)=>(
-                    <div key={i} style={{background:CREAM,borderRadius:8,padding:"8px 10px",textAlign:"center",border:`1px solid ${GOLD_DIM}33`}}>
-                      <div style={{fontSize:10,color:"#888",fontWeight:700,textTransform:"uppercase"}}>{m.label}</div>
-                      <div style={{fontSize:13,fontWeight:900,color:GOLD_DIM,marginTop:2}}>{m.value}</div>
+                    <input value={editingStaff.name} onChange={e=>setEditingStaff(p=>({...p,name:e.target.value}))}
+                      style={{width:"100%",borderRadius:10,border:`1.5px solid ${GOLD}`,padding:"10px 12px",fontSize:13,fontFamily:"inherit",outline:"none",boxSizing:"border-box",marginBottom:8}}/>
+                    <select value={editingStaff.role} onChange={e=>setEditingStaff(p=>({...p,role:e.target.value}))}
+                      style={{width:"100%",borderRadius:10,border:`1.5px solid ${GOLD_DIM}`,padding:"10px 12px",fontSize:13,fontFamily:"inherit",outline:"none",boxSizing:"border-box",marginBottom:8}}>
+                      <option>Stylist</option><option>Barber</option><option>Nail Technician</option><option>Makeup Artist</option><option>Receptionist</option>
+                    </select>
+                    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+                      <span style={{fontSize:12,color:"#888"}}>Commission %:</span>
+                      <input type="number" value={editingStaff.commission_pct} onChange={e=>setEditingStaff(p=>({...p,commission_pct:parseInt(e.target.value)||0}))}
+                        style={{flex:1,borderRadius:10,border:`1.5px solid ${GOLD_DIM}`,padding:"10px 12px",fontSize:13,fontFamily:"inherit",outline:"none"}}/>
                     </div>
-                  ))}
-                </div>
+                    <div style={{display:"flex",gap:8}}>
+                      <GoldBtn onClick={async()=>{
+                        await db("PATCH","staff",{name:editingStaff.name,role:editingStaff.role,commission_pct:editingStaff.commission_pct},`?id=eq.${editingStaff.id}`);
+                        setStaffList(p=>p.map(x=>x.id===editingStaff.id?{...x,...editingStaff}:x));
+                        setEditingStaff(null);
+                      }} style={{flex:1,padding:"9px 0",fontSize:12}}>Save</GoldBtn>
+                      <button onClick={()=>setEditingStaff(null)} style={{flex:1,background:"none",border:`1px solid ${GOLD_DIM}`,borderRadius:10,padding:"9px 0",fontSize:12,color:GOLD_DIM,cursor:"pointer",fontWeight:700}}>Cancel</button>
+                    </div>
+                  </div>
+                ):(
+                  <div>
+                    <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:12}}>
+                      <div style={{width:44,height:44,borderRadius:"50%",background:`linear-gradient(135deg,${BLACK},#2C1F00)`,border:`2px solid ${GOLD}`,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,color:GOLD_LT,fontSize:18,flexShrink:0}}>{s.name[0]}</div>
+                      <div style={{flex:1}}>
+                        <div style={{fontWeight:800,fontSize:15,color:DARK}}>{s.name}</div>
+                        <div style={{fontSize:12,color:"#888"}}>{s.role} · {s.commission_pct||40}% commission</div>
+                      </div>
+                      <div style={{display:"flex",gap:6}}>
+                        <button onClick={()=>setEditingStaff({...s})} style={{background:CREAM,border:`1px solid ${GOLD_DIM}`,borderRadius:8,padding:"6px 10px",fontSize:11,color:GOLD_DIM,cursor:"pointer",fontWeight:700}}>✏️ Edit</button>
+                        <button onClick={async()=>{
+                          if(!window.confirm(`Deactivate ${s.name}?`)) return;
+                          await db("PATCH","staff",{active:false},`?id=eq.${s.id}`);
+                          setStaffList(p=>p.filter(x=>x.id!==s.id));
+                        }} style={{background:"#FEE2E2",border:"none",borderRadius:8,padding:"6px 10px",fontSize:11,color:RED,cursor:"pointer",fontWeight:700}}>Remove</button>
+                      </div>
+                    </div>
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+                      {[{label:"Services",value:s.salesCount},{label:"Revenue",value:fmt(s.revenue)},{label:"Commission",value:fmt(s.commission)}].map((m,i)=>(
+                        <div key={i} style={{background:CREAM,borderRadius:8,padding:"8px 10px",textAlign:"center",border:`1px solid ${GOLD_DIM}33`}}>
+                          <div style={{fontSize:10,color:"#888",fontWeight:700,textTransform:"uppercase"}}>{m.label}</div>
+                          <div style={{fontSize:13,fontWeight:900,color:GOLD_DIM,marginTop:2}}>{m.value}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
           </div>
         )}
-
         {/* ── INVENTORY ── */}
         {page==="inventory"&&(
           <div>
