@@ -290,7 +290,13 @@ function BookingPage(){
   async function confirm(){
     if(!sel.name||!sel.phone) return alert("Please enter your name and phone number");
     setSaving(true);
+    // Save booking
     const result = await db("POST","bookings",{name:sel.name,phone:sel.phone,service:sel.service?.name,price:sel.service?.price,stylist:sel.stylist||"Any available",date:sel.date,time:sel.time,status:"pending",payment_status:"pending"});
+    // Auto-save customer record
+    const existing = await db("GET","customers",null,`?phone=eq.${sel.phone}&limit=1`);
+    if(existing && existing.length===0){
+      await db("POST","customers",{name:sel.name,phone:sel.phone,visit_count:0,total_spend:0,last_visit:sel.date});
+    }
     setSaving(false);
     setSavedBooking({id:result?.[0]?.id,name:sel.name,phone:sel.phone,service:sel.service?.name,price:sel.service?.price,stylist:sel.stylist||"Any available",date:sel.date,time:sel.time});
     setShowMpesa(true);
@@ -526,6 +532,31 @@ function POSApp({ onLogout }){
 
   async function markDone(id){ await db("PATCH","bookings",{status:"done"},`?id=eq.${id}`); setAppointments(p=>p.map(a=>a.id===id?{...a,status:"done"}:a)); }
   async function markCancelled(id){ await db("PATCH","bookings",{status:"cancelled"},`?id=eq.${id}`); setAppointments(p=>p.map(a=>a.id===id?{...a,status:"cancelled"}:a)); }
+
+  async function convertToSale(a){
+    // Mark booking as done
+    await db("PATCH","bookings",{status:"done"},`?id=eq.${a.id}`);
+    setAppointments(p=>p.map(b=>b.id===a.id?{...b,status:"done"}:b));
+    // Find or create customer
+    const existing = await db("GET","customers",null,`?phone=eq.${a.phone}&limit=1`);
+    let customer = existing?.[0];
+    if(!customer){
+      const saved = await db("POST","customers",{name:a.name,phone:a.phone,visit_count:0,total_spend:0,last_visit:todayStr()});
+      customer = saved?.[0];
+    }
+    if(customer) setCustomers(p=>p.find(c=>c.id===customer.id)?p:[customer,...p]);
+    // Find service from SERVICES list
+    const svc = SERVICES.find(s=>s.name===a.service);
+    const cartItem = svc ? [{...svc,type:"service",qty:1}] : [];
+    // Pre-fill POS
+    setSelectedCustomer(customer||{name:a.name,phone:a.phone});
+    setClientName(a.name);
+    setClientPhone(a.phone||"");
+    setCustomerSearch(a.name);
+    setCart(cartItem);
+    setSelStaff(STAFF.find(s=>s.name===a.stylist)?.name||"");
+    setPage("pos");
+  }
 
   const cartTotal = cart.reduce((s,i)=>s+i.price*(i.qty||1),0);
   const commission = cartTotal*0.4;
@@ -891,9 +922,14 @@ function POSApp({ onLogout }){
                   </div>
                 )}
                 {a.status==="pending"&&(
-                  <div style={{display:"flex",gap:8}}>
-                    <button onClick={()=>markDone(a.id)} style={{flex:1,background:"#D1FAE5",color:"#065F46",border:"none",borderRadius:8,padding:"8px 0",fontWeight:800,fontSize:13,cursor:"pointer"}}>✅ Mark Done</button>
-                    <button onClick={()=>markCancelled(a.id)} style={{flex:1,background:"#FEE2E2",color:"#991B1B",border:"none",borderRadius:8,padding:"8px 0",fontWeight:800,fontSize:13,cursor:"pointer"}}>❌ Cancel</button>
+                  <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                    <button onClick={()=>convertToSale(a)} style={{width:"100%",background:`linear-gradient(135deg,${GOLD},${GOLD_LT})`,color:BLACK,border:"none",borderRadius:8,padding:"10px 0",fontWeight:900,fontSize:13,cursor:"pointer"}}>
+                      🛒 Client Arrived — Convert to Sale
+                    </button>
+                    <div style={{display:"flex",gap:8}}>
+                      <button onClick={()=>markDone(a.id)} style={{flex:1,background:"#D1FAE5",color:"#065F46",border:"none",borderRadius:8,padding:"8px 0",fontWeight:800,fontSize:12,cursor:"pointer"}}>✅ Mark Done</button>
+                      <button onClick={()=>markCancelled(a.id)} style={{flex:1,background:"#FEE2E2",color:"#991B1B",border:"none",borderRadius:8,padding:"8px 0",fontWeight:800,fontSize:12,cursor:"pointer"}}>❌ Cancel</button>
+                    </div>
                   </div>
                 )}
               </div>
