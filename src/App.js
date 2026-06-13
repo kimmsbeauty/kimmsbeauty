@@ -4,21 +4,59 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 const SUPABASE_URL = "https://ukoccobbjeomjwjcvrma.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVrb2Njb2JiamVvbWp3amN2cm1hIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODExMjg4MzAsImV4cCI6MjA5NjcwNDgzMH0.a-nDh04ujZQ8w9lwu9rkHuge9xGRbLRfV7vD3zRCAqg";
 
-async function db(method, table, data = null, filters = "") {
+// ── OFFLINE QUEUE ──────────────────────────────────────────────────────────
+const offlineQueue = [];
+let isSyncing = false;
+
+async function syncOfflineQueue() {
+  if (isSyncing || offlineQueue.length === 0 || !navigator.onLine) return;
+  isSyncing = true;
+  while (offlineQueue.length > 0) {
+    const item = offlineQueue[0];
+    try {
+      await dbDirect(item.method, item.table, item.data, item.filters);
+      offlineQueue.shift();
+    } catch(e) { break; }
+  }
+  isSyncing = false;
+}
+
+if (typeof window !== "undefined") {
+  window.addEventListener("online", syncOfflineQueue);
+}
+
+async function dbDirect(method, table, data = null, filters = "") {
   const url = `${SUPABASE_URL}/rest/v1/${table}${filters}`;
-  const res = await fetch(url, {
-    method,
-    headers: {
-      "apikey": SUPABASE_KEY,
-      "Authorization": `Bearer ${SUPABASE_KEY}`,
-      "Content-Type": "application/json",
-      "Prefer": method === "POST" ? "return=representation" : "",
-    },
-    body: data ? JSON.stringify(data) : undefined,
-  });
-  if (!res.ok) return null;
-  if (method === "DELETE" || method === "PATCH") return true;
-  return res.json();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try {
+    const res = await fetch(url, {
+      method,
+      headers: {
+        "apikey": SUPABASE_KEY,
+        "Authorization": `Bearer ${SUPABASE_KEY}`,
+        "Content-Type": "application/json",
+        "Prefer": method === "POST" ? "return=representation" : "",
+      },
+      body: data ? JSON.stringify(data) : undefined,
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+    if (!res.ok) return null;
+    if (method === "DELETE" || method === "PATCH") return true;
+    return res.json();
+  } catch(e) {
+    clearTimeout(timeout);
+    return null;
+  }
+}
+
+async function db(method, table, data = null, filters = "") {
+  if (!navigator.onLine && method !== "GET") {
+    offlineQueue.push({ method, table, data, filters });
+    return null;
+  }
+  return dbDirect(method, table, data, filters);
 }
 
 const MPESA_TILL = "5927571";
@@ -484,21 +522,27 @@ function POSApp({ onLogout }){
 
   useEffect(()=>{
     async function loadAll(){
-      const [s,p,f,c,st,sv] = await Promise.all([
-        db("GET","sales",null,"?order=created_at.desc"),
-        db("GET","stock",null,""),
-        db("GET","feedback",null,"?order=created_at.desc"),
-        db("GET","customers",null,"?order=created_at.desc"),
-        db("GET","staff",null,"?active=eq.true&order=created_at.asc"),
-        db("GET","services",null,"?active=eq.true&order=cat.asc,name.asc"),
-      ]);
-      if(s) setSales(s);
-      if(p) setProducts(p);
-      if(f) setFeedbacks(f);
-      if(c) setCustomers(c);
-      if(st&&st.length>0) setStaffList(st);
-      if(sv&&sv.length>0) setServicesList(sv);
-      setLoading(false);
+      try {
+        const [s,p,f,c,st,sv] = await Promise.all([
+          db("GET","sales",null,"?order=created_at.desc&limit=100"),
+          db("GET","stock",null,"?limit=50"),
+          db("GET","feedback",null,"?order=created_at.desc&limit=50"),
+          db("GET","customers",null,"?order=created_at.desc&limit=200"),
+          db("GET","staff",null,"?active=eq.true&order=created_at.asc"),
+          db("GET","services",null,"?active=eq.true&order=cat.asc,name.asc"),
+        ]);
+        if(s) setSales(s);
+        if(p&&p.length>0) setProducts(p);
+        if(f) setFeedbacks(f);
+        if(c) setCustomers(c);
+        if(st&&st.length>0) setStaffList(st);
+        if(sv&&sv.length>0) setServicesList(sv);
+      } catch(e) {
+        console.error("Load error:",e);
+        setLoadError(true);
+      } finally {
+        setLoading(false);
+      }
     }
     loadAll();
     const t=setInterval(()=>setTime(nowTime()),30000);
@@ -509,12 +553,16 @@ function POSApp({ onLogout }){
   async function searchCustomers(q){
     setCustomerSearch(q);
     if(q.length < 2){ setCustomerResults([]); setShowCustomerDrop(false); return; }
-    const results = customers.filter(c=>
-      c.name.toLowerCase().includes(q.toLowerCase()) ||
-      (c.phone && c.phone.includes(q))
-    );
-    setCustomerResults(results);
-    setShowCustomerDrop(true);
+    try {
+      const results = customers.filter(c=>
+        c.name.toLowerCase().includes(q.toLowerCase()) ||
+        (c.phone && c.phone.includes(q))
+      );
+      setCustomerResults(results);
+      setShowCustomerDrop(true);
+    } catch(e) {
+      setCustomerResults([]);
+    }
   }
 
   function selectCustomer(c){
@@ -642,8 +690,9 @@ function POSApp({ onLogout }){
     const prod=products.find(p=>p.id===id);
     if(!prod) return;
     const ns=Math.max(0,prod.stock+delta);
-    await db("PATCH","stock",{stock:ns},`?id=eq.${id}`);
     setProducts(p=>p.map(pr=>pr.id===id?{...pr,stock:ns}:pr));
+    try { await db("PATCH","stock",{stock:ns},`?id=eq.${id}`); }
+    catch(e){ console.error("Stock update failed:",e); }
   }
 
   const todaySales=sales.filter(s=>s.date===todayStr());
@@ -668,10 +717,26 @@ function POSApp({ onLogout }){
 
   const inputStyle={borderRadius:10,border:`1.5px solid ${GOLD_DIM}`,padding:"10px 12px",fontSize:13,fontFamily:"inherit",outline:"none",background:WHITE};
 
+  // Online/offline state
+  const [isOnline,setIsOnline]=useState(navigator.onLine);
+  const [syncPending,setSyncPending]=useState(false);
+  const [loadError,setLoadError]=useState(false);
+
+  useEffect(()=>{
+    const goOnline=()=>{ setIsOnline(true); setSyncPending(offlineQueue.length>0); syncOfflineQueue().then(()=>setSyncPending(false)); };
+    const goOffline=()=>setIsOnline(false);
+    window.addEventListener("online",goOnline);
+    window.addEventListener("offline",goOffline);
+    return()=>{ window.removeEventListener("online",goOnline); window.removeEventListener("offline",goOffline); };
+  },[]);
+
   if(loading) return(
     <div style={{minHeight:"100vh",background:`linear-gradient(160deg,${BLACK} 0%,#1A1400 100%)`,display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:16}}>
       <KimmsLogo size="lg" dark={false}/>
-      <div style={{color:GOLD_LT,fontSize:13,letterSpacing:"0.1em",textTransform:"uppercase",marginTop:16}}>Loading your salon data...</div>
+      <div style={{color:GOLD_LT,fontSize:13,letterSpacing:"0.1em",textTransform:"uppercase",marginTop:16}}>
+        {loadError?"Unable to load — check your connection":"Loading your salon data..."}
+      </div>
+      {loadError&&<button onClick={()=>window.location.reload()} style={{background:`linear-gradient(135deg,${GOLD},${GOLD_LT})`,color:BLACK,border:"none",borderRadius:10,padding:"10px 24px",fontWeight:800,fontSize:13,cursor:"pointer",marginTop:8}}>Retry</button>}
     </div>
   );
 
@@ -695,6 +760,18 @@ function POSApp({ onLogout }){
               <button onClick={()=>setShowMpesaConfirm(false)} style={{width:"100%",background:WHITE,color:"#888",border:`1.5px solid ${GOLD_DIM}`,borderRadius:12,padding:"12px 0",fontWeight:700,fontSize:13,cursor:"pointer"}}>← Go Back</button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* OFFLINE BANNER */}
+      {!isOnline&&(
+        <div style={{background:RED,color:WHITE,textAlign:"center",padding:"6px 16px",fontSize:12,fontWeight:700,flexShrink:0}}>
+          📵 Offline — Sales will sync when connected
+        </div>
+      )}
+      {syncPending&&isOnline&&(
+        <div style={{background:GREEN,color:WHITE,textAlign:"center",padding:"6px 16px",fontSize:12,fontWeight:700,flexShrink:0}}>
+          🔄 Syncing offline data...
         </div>
       )}
 
@@ -871,111 +948,123 @@ function POSApp({ onLogout }){
             <div style={{fontWeight:900,fontSize:18,color:DARK,marginBottom:4}}>Clients</div>
             <div style={{fontSize:12,color:"#888",marginBottom:16}}>{customers.length} total · {frequentCustomers.length} regulars · {atRiskCustomers.length} not seen in 30+ days</div>
 
-            {/* Flags */}
+            {/* At-risk clients with WhatsApp button */}
             {atRiskCustomers.length>0&&(
               <div style={{background:"#FFF5F5",borderRadius:12,padding:14,marginBottom:14,border:"1.5px solid #FEE2E2"}}>
-                <div style={{fontWeight:800,fontSize:13,color:RED,marginBottom:8}}>⚠️ Not seen in 30+ days ({atRiskCustomers.length})</div>
-                {atRiskCustomers.slice(0,3).map(c=>(
-                  <div key={c.id} style={{fontSize:12,color:DARK,marginBottom:4,display:"flex",justifyContent:"space-between"}}>
-                    <span>{c.name}</span>
-                    <span style={{color:"#888"}}>{c.phone}</span>
+                <div style={{fontWeight:800,fontSize:13,color:RED,marginBottom:10}}>⚠️ Not seen in 30+ days — Send reminder</div>
+                {atRiskCustomers.map(c=>(
+                  <div key={c.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8,padding:"8px 10px",background:WHITE,borderRadius:8,border:"1px solid #FEE2E2"}}>
+                    <div>
+                      <div style={{fontSize:13,fontWeight:700,color:DARK}}>{c.name}</div>
+                      <div style={{fontSize:11,color:"#888"}}>{c.phone} · Last visit: {c.last_visit||"unknown"}</div>
+                    </div>
+                    {c.phone&&(
+                      <a href={`https://wa.me/254${c.phone.replace(/^0/,"").replace(/\D/g,"")}?text=${encodeURIComponent(`Hi ${c.name}! 👋
+
+We miss you at Kimm's Beauty Parlour! 💕
+
+It's been a while since your last visit. We'd love to see you again.
+
+✂️ Book your appointment:
+${window.location.origin}/booking
+
+Or call us: 0113828280
+
+— Kimm's Beauty Parlour
+"Beauty That Speaks Confidence" 👑`)}`}
+                        target="_blank" rel="noreferrer"
+                        style={{background:"#25D366",color:WHITE,borderRadius:20,padding:"7px 12px",fontSize:11,fontWeight:800,textDecoration:"none",whiteSpace:"nowrap",flexShrink:0}}>
+                        📲 WhatsApp
+                      </a>
+                    )}
                   </div>
                 ))}
-                {atRiskCustomers.length>3&&<div style={{fontSize:11,color:"#aaa",marginTop:4}}>+{atRiskCustomers.length-3} more</div>}
+                <div style={{fontSize:11,color:"#aaa",marginTop:8}}>Tap WhatsApp to send a reminder directly to each client</div>
               </div>
             )}
 
+            {/* Frequent clients */}
             {frequentCustomers.length>0&&(
               <div style={{background:"#FFFBEB",borderRadius:12,padding:14,marginBottom:14,border:`1.5px solid ${GOLD_DIM}66`}}>
-                <div style={{fontWeight:800,fontSize:13,color:GOLD_DIM,marginBottom:8}}>⭐ Regular Clients ({frequentCustomers.length})</div>
-                {frequentCustomers.slice(0,3).map(c=>(
-                  <div key={c.id} style={{fontSize:12,color:DARK,marginBottom:4,display:"flex",justifyContent:"space-between"}}>
-                    <span>{c.name}</span>
-                    <span style={{color:"#888"}}>{c.visit_count} visits · {fmt(c.total_spend)}</span>
+                <div style={{fontWeight:800,fontSize:13,color:GOLD_DIM,marginBottom:10}}>⭐ Regular Clients ({frequentCustomers.length})</div>
+                {frequentCustomers.map(c=>(
+                  <div key={c.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6,padding:"8px 10px",background:WHITE,borderRadius:8,border:`1px solid ${GOLD_DIM}33`}}>
+                    <div>
+                      <div style={{fontSize:13,fontWeight:700,color:DARK}}>{c.name}</div>
+                      <div style={{fontSize:11,color:"#888"}}>{c.visit_count} visits · {fmt(c.total_spend)} total</div>
+                    </div>
+                    {c.phone&&(
+                      <a href={`https://wa.me/254${c.phone.replace(/^0/,"").replace(/\D/g,"")}?text=${encodeURIComponent(`Hi ${c.name}! 👑
+
+Thank you for being a loyal client at Kimm's Beauty Parlour! 💕
+
+As one of our valued regulars, we appreciate your continued support.
+
+Book your next appointment:
+${window.location.origin}/booking
+
+— Kimm's Beauty Parlour`)}`}
+                        target="_blank" rel="noreferrer"
+                        style={{background:"#25D366",color:WHITE,borderRadius:20,padding:"7px 12px",fontSize:11,fontWeight:800,textDecoration:"none",whiteSpace:"nowrap",flexShrink:0}}>
+                        📲 WhatsApp
+                      </a>
+                    )}
                   </div>
                 ))}
               </div>
             )}
 
-            {/* All customers */}
+            {/* Send bulk reminder */}
+            {atRiskCustomers.filter(c=>c.phone).length>0&&(
+              <div style={{background:WHITE,borderRadius:12,padding:14,marginBottom:14,border:`1px solid ${GOLD_DIM}44`}}>
+                <div style={{fontWeight:800,fontSize:13,color:DARK,marginBottom:4}}>📢 Bulk WhatsApp Reminder</div>
+                <div style={{fontSize:12,color:"#888",marginBottom:10}}>Open WhatsApp and send to all {atRiskCustomers.filter(c=>c.phone).length} inactive clients one by one</div>
+                <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                  {atRiskCustomers.filter(c=>c.phone).slice(0,5).map(c=>(
+                    <a key={c.id}
+                      href={`https://wa.me/254${c.phone.replace(/^0/,"").replace(/\D/g,"")}?text=${encodeURIComponent(`Hi ${c.name}! We miss you at Kimm's Beauty Parlour 💕 Book your next appointment: ${window.location.origin}/booking`)}`}
+                      target="_blank" rel="noreferrer"
+                      style={{background:"#F0FFF4",color:"#166534",borderRadius:8,padding:"8px 12px",fontSize:12,fontWeight:700,textDecoration:"none",border:"1px solid #BBF7D0",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                      <span>{c.name} · {c.phone}</span>
+                      <span>📲 Send →</span>
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* All clients */}
             <div style={{fontWeight:800,fontSize:14,color:DARK,marginBottom:10}}>All Clients</div>
             {customers.length===0&&(
               <div style={{textAlign:"center",padding:"40px 20px",color:"#aaa"}}>
                 <div style={{fontSize:36,marginBottom:8}}>👤</div>
-                <div style={{fontSize:14}}>No clients yet. They'll appear here after their first sale.</div>
+                <div style={{fontSize:14}}>No clients yet. They appear here after their first sale or booking.</div>
               </div>
             )}
             {customers.map(c=>(
-              <div key={c.id} style={{background:WHITE,borderRadius:12,padding:"12px 14px",marginBottom:8,border:`1px solid ${GOLD_DIM}33`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                <div>
-                  <div style={{fontWeight:700,fontSize:13,color:DARK,display:"flex",alignItems:"center",gap:6}}>
-                    {c.name}
-                    {c.visit_count>=4&&<span style={{fontSize:9,background:"#FEF3C7",color:"#92400E",padding:"2px 6px",borderRadius:20,fontWeight:700}}>⭐ Regular</span>}
-                  </div>
-                  <div style={{fontSize:11,color:"#888",marginTop:2}}>{c.phone} · Last visit: {c.last_visit||"—"}</div>
-                </div>
-                <div style={{textAlign:"right"}}>
-                  <div style={{fontSize:13,fontWeight:800,color:GOLD_DIM}}>{fmt(c.total_spend)}</div>
-                  <div style={{fontSize:10,color:"#aaa"}}>{c.visit_count} visit{c.visit_count!==1?"s":""}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* ── APPOINTMENTS ── */}
-        {page==="appointments"&&(
-          <div>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
-              <div style={{fontWeight:900,fontSize:18,color:DARK}}>Customer Bookings</div>
-              <button onClick={loadAppointments} style={{background:GRAY,color:GOLD_DIM,border:`1px solid ${GOLD_DIM}`,borderRadius:20,padding:"6px 14px",fontSize:12,fontWeight:700,cursor:"pointer"}}>↻ Refresh</button>
-            </div>
-            {loadingAppts&&<div style={{textAlign:"center",padding:"40px 0",color:"#aaa"}}>Loading bookings...</div>}
-            {!loadingAppts&&appointments.length===0&&(
-              <div style={{textAlign:"center",padding:"40px 20px",color:"#aaa"}}>
-                <div style={{fontSize:36,marginBottom:8}}>📅</div>
-                <div style={{fontSize:14}}>No bookings yet.</div>
-                <a href="/booking" target="_blank" rel="noreferrer"
-                  style={{display:"inline-block",marginTop:16,background:`linear-gradient(135deg,${GOLD},${GOLD_LT})`,color:BLACK,borderRadius:20,padding:"10px 20px",fontSize:13,fontWeight:900,textDecoration:"none"}}>
-                  View Booking Page →
-                </a>
-              </div>
-            )}
-            {appointments.map(a=>(
-              <div key={a.id} style={{background:WHITE,borderRadius:14,padding:16,marginBottom:10,border:`1.5px solid ${a.status==="pending"?GOLD_DIM+"88":a.status==="done"?"#BBF7D0":"#FEE2E2"}`}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
-                  <div>
-                    <div style={{fontWeight:800,fontSize:15,color:DARK}}>{a.name}</div>
-                    <div style={{fontSize:12,color:"#888"}}>📞 {a.phone}</div>
-                  </div>
-                  <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4}}>
-                    <div style={{padding:"4px 10px",borderRadius:20,fontSize:11,fontWeight:800,background:a.status==="pending"?"#FEF3C7":a.status==="done"?"#D1FAE5":"#FEE2E2",color:a.status==="pending"?"#92400E":a.status==="done"?"#065F46":"#991B1B"}}>
-                      {a.status==="pending"?"⏳ Pending":a.status==="done"?"✅ Done":"❌ Cancelled"}
+              <div key={c.id} style={{background:WHITE,borderRadius:12,padding:"12px 14px",marginBottom:8,border:`1px solid ${GOLD_DIM}33`}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <div style={{flex:1}}>
+                    <div style={{fontWeight:700,fontSize:13,color:DARK,display:"flex",alignItems:"center",gap:6}}>
+                      {c.name}
+                      {c.visit_count>=4&&<span style={{fontSize:9,background:"#FEF3C7",color:"#92400E",padding:"2px 6px",borderRadius:20,fontWeight:700}}>⭐ Regular</span>}
                     </div>
-                    <div style={{padding:"3px 8px",borderRadius:20,fontSize:10,fontWeight:800,background:a.payment_status==="paid_upfront"?"#D1FAE5":"#FEF3C7",color:a.payment_status==="paid_upfront"?"#065F46":"#92400E"}}>
-                      {a.payment_status==="paid_upfront"?"💚 Paid via M-Pesa":"🕐 Pay at Salon"}
+                    <div style={{fontSize:11,color:"#888",marginTop:2}}>{c.phone} · Last visit: {c.last_visit||"—"}</div>
+                  </div>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <div style={{textAlign:"right"}}>
+                      <div style={{fontSize:13,fontWeight:800,color:GOLD_DIM}}>{fmt(c.total_spend)}</div>
+                      <div style={{fontSize:10,color:"#aaa"}}>{c.visit_count} visit{c.visit_count!==1?"s":""}</div>
                     </div>
+                    {c.phone&&(
+                      <a href={`https://wa.me/254${c.phone.replace(/^0/,"").replace(/\D/g,"")}?text=${encodeURIComponent(`Hi ${c.name}! 💕 We look forward to seeing you at Kimm's Beauty Parlour. Book here: ${window.location.origin}/booking`)}`}
+                        target="_blank" rel="noreferrer"
+                        style={{background:"#25D366",color:WHITE,borderRadius:"50%",width:32,height:32,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,textDecoration:"none",flexShrink:0}}>
+                        📲
+                      </a>
+                    )}
                   </div>
                 </div>
-                <div style={{fontSize:13,color:DARK,marginBottom:4}}>💇 <b>{a.service}</b> · <span style={{color:GOLD_DIM,fontWeight:800}}>{fmt(a.price)}</span></div>
-                <div style={{fontSize:12,color:"#888",marginBottom:4}}>👩‍💼 {a.stylist}</div>
-                <div style={{fontSize:12,color:"#888",marginBottom:10}}>📅 {a.date} at {a.time}</div>
-                {a.status==="pending"&&a.payment_status!=="paid_upfront"&&(
-                  <div style={{background:"#FFFBEB",border:"1px solid #FDE68A",borderRadius:8,padding:"8px 10px",marginBottom:10,fontSize:12,color:"#92400E"}}>
-                    💳 Collect M-Pesa on arrival · Till <b>{MPESA_TILL}</b> · {fmt(a.price)}
-                  </div>
-                )}
-                {a.status==="pending"&&(
-                  <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                    <button onClick={()=>convertToSale(a)} style={{width:"100%",background:`linear-gradient(135deg,${GOLD},${GOLD_LT})`,color:BLACK,border:"none",borderRadius:8,padding:"10px 0",fontWeight:900,fontSize:13,cursor:"pointer"}}>
-                      🛒 Client Arrived — Convert to Sale
-                    </button>
-                    <div style={{display:"flex",gap:8}}>
-                      <button onClick={()=>markDone(a.id)} style={{flex:1,background:"#D1FAE5",color:"#065F46",border:"none",borderRadius:8,padding:"8px 0",fontWeight:800,fontSize:12,cursor:"pointer"}}>✅ Mark Done</button>
-                      <button onClick={()=>markCancelled(a.id)} style={{flex:1,background:"#FEE2E2",color:"#991B1B",border:"none",borderRadius:8,padding:"8px 0",fontWeight:800,fontSize:12,cursor:"pointer"}}>❌ Cancel</button>
-                    </div>
-                  </div>
-                )}
               </div>
             ))}
           </div>
