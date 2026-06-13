@@ -1289,10 +1289,49 @@ function POSApp({ onLogout }){
           </div>
         )}
         {/* ── INVENTORY ── */}
-        {page==="inventory"&&(
+        {page==="inventory"&&(()=>{
+          const [showAddProduct,setShowAddProduct]=React.useState(false);
+          const [newProduct,setNewProduct]=React.useState({name:"",cat:"Hair",price:"",stock:""});
+          return(
           <div>
-            <div style={{fontWeight:900,fontSize:18,color:DARK,marginBottom:16}}>Product Stock</div>
-            <div style={{fontSize:12,color:"#888",marginBottom:14}}>Tap + or − to adjust stock manually after purchases or deliveries</div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+              <div style={{fontWeight:900,fontSize:18,color:DARK}}>Product Stock</div>
+              <GoldBtn onClick={()=>setShowAddProduct(p=>!p)} style={{padding:"8px 16px",fontSize:12}}>+ Add Product</GoldBtn>
+            </div>
+            <div style={{fontSize:12,color:"#888",marginBottom:14}}>Tap + or − to adjust stock after purchases or deliveries</div>
+
+            {/* Add product form */}
+            {showAddProduct&&(
+              <div style={{background:WHITE,borderRadius:14,padding:16,marginBottom:16,border:`1.5px solid ${GOLD}`,boxShadow:`0 2px 16px rgba(201,168,76,0.15)`}}>
+                <div style={{fontWeight:800,fontSize:14,color:DARK,marginBottom:12}}>New Product</div>
+                <input placeholder="Product name" value={newProduct.name} onChange={e=>setNewProduct(p=>({...p,name:e.target.value}))}
+                  style={{width:"100%",borderRadius:10,border:`1.5px solid ${GOLD_DIM}`,padding:"10px 12px",fontSize:13,fontFamily:"inherit",outline:"none",boxSizing:"border-box",marginBottom:8}}/>
+                <select value={newProduct.cat} onChange={e=>setNewProduct(p=>({...p,cat:e.target.value}))}
+                  style={{width:"100%",borderRadius:10,border:`1.5px solid ${GOLD_DIM}`,padding:"10px 12px",fontSize:13,fontFamily:"inherit",outline:"none",boxSizing:"border-box",marginBottom:8}}>
+                  <option>Hair</option><option>Nails</option><option>Beauty</option><option>Spa</option>
+                </select>
+                <div style={{display:"flex",gap:8,marginBottom:12}}>
+                  <input placeholder="Price (KES)" type="number" value={newProduct.price} onChange={e=>setNewProduct(p=>({...p,price:e.target.value}))}
+                    style={{flex:1,borderRadius:10,border:`1.5px solid ${GOLD_DIM}`,padding:"10px 12px",fontSize:13,fontFamily:"inherit",outline:"none"}}/>
+                  <input placeholder="Stock qty" type="number" value={newProduct.stock} onChange={e=>setNewProduct(p=>({...p,stock:e.target.value}))}
+                    style={{flex:1,borderRadius:10,border:`1.5px solid ${GOLD_DIM}`,padding:"10px 12px",fontSize:13,fontFamily:"inherit",outline:"none"}}/>
+                </div>
+                <div style={{display:"flex",gap:8}}>
+                  <GoldBtn onClick={async()=>{
+                    if(!newProduct.name||!newProduct.price) return alert("Please enter product name and price");
+                    const id="PRD"+Date.now();
+                    const prod={id,name:newProduct.name,cat:newProduct.cat,price:parseInt(newProduct.price),stock:parseInt(newProduct.stock)||0};
+                    const saved = await db("POST","stock",prod);
+                    setProducts(p=>[...p,saved?.[0]||prod]);
+                    setShowAddProduct(false);
+                    setNewProduct({name:"",cat:"Hair",price:"",stock:""});
+                  }} style={{flex:1,padding:"10px 0",fontSize:13}}>Save Product</GoldBtn>
+                  <button onClick={()=>setShowAddProduct(false)} style={{flex:1,background:"none",border:`1px solid ${GOLD_DIM}`,borderRadius:10,padding:"10px 0",fontSize:13,color:GOLD_DIM,cursor:"pointer",fontWeight:700}}>Cancel</button>
+                </div>
+              </div>
+            )}
+
+            {/* Products list */}
             {products.map(p=>(
               <div key={p.id} style={{background:WHITE,borderRadius:12,padding:"12px 14px",marginBottom:8,border:`1.5px solid ${p.stock<=5?"#FEE2E2":GOLD_DIM+"44"}`}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
@@ -1300,14 +1339,13 @@ function POSApp({ onLogout }){
                     <div style={{fontSize:13,fontWeight:700,color:DARK}}>{p.name}</div>
                     <div style={{fontSize:11,color:"#888"}}>{p.cat} · <span style={{color:GOLD_DIM,fontWeight:700}}>{fmt(p.price)}</span></div>
                   </div>
-                  {/* Stock adjuster */}
                   <div style={{display:"flex",alignItems:"center",gap:8}}>
-                    <button onClick={()=>adjustStock(p.id,-1)} style={{width:30,height:30,borderRadius:"50%",border:`1.5px solid ${RED}`,background:WHITE,color:RED,fontSize:18,fontWeight:900,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",lineHeight:1}}>−</button>
+                    <button onClick={()=>adjustStock(p.id,-1)} style={{width:30,height:30,borderRadius:"50%",border:`1.5px solid ${RED}`,background:WHITE,color:RED,fontSize:18,fontWeight:900,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>−</button>
                     <div style={{textAlign:"center",minWidth:36}}>
                       <div style={{fontSize:18,fontWeight:900,color:p.stock<=5?RED:p.stock<=10?AMBER:GREEN}}>{p.stock}</div>
-                      <div style={{fontSize:9,color:"#aaa",textTransform:"uppercase",letterSpacing:"0.05em"}}>units</div>
+                      <div style={{fontSize:9,color:"#aaa",textTransform:"uppercase"}}>units</div>
                     </div>
-                    <button onClick={()=>adjustStock(p.id,1)} style={{width:30,height:30,borderRadius:"50%",border:`1.5px solid ${GREEN}`,background:WHITE,color:GREEN,fontSize:18,fontWeight:900,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",lineHeight:1}}>+</button>
+                    <button onClick={()=>adjustStock(p.id,1)} style={{width:30,height:30,borderRadius:"50%",border:`1.5px solid ${GREEN}`,background:WHITE,color:GREEN,fontSize:18,fontWeight:900,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>+</button>
                   </div>
                 </div>
                 {p.stock<=5&&(
@@ -1316,8 +1354,8 @@ function POSApp({ onLogout }){
               </div>
             ))}
           </div>
-        )}
-
+          );
+        })()}
       </div>
     </div>
   );
