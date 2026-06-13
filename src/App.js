@@ -427,6 +427,18 @@ function BookingPage(){
                 ))}
               </div>
             ))}
+          {/* WhatsApp Help Button */}
+          <div style={{marginTop:24,padding:"14px 16px",background:"rgba(255,255,255,0.05)",borderRadius:14,border:"1px solid rgba(255,255,255,0.1)",textAlign:"center"}}>
+            <div style={{fontSize:13,color:"rgba(255,255,255,0.6)",marginBottom:4}}>Can't find what you're looking for?</div>
+            <div style={{fontSize:11,color:"rgba(255,255,255,0.4)",marginBottom:12}}>Our team is happy to help you book the right service</div>
+            <a href={"https://wa.me/254113828280?text=Help%20me%20book%20at%20Kimms%20Beauty%20Parlour"}
+              target="_blank" rel="noreferrer"
+              style={{display:"inline-flex",alignItems:"center",gap:8,background:"#25D366",color:WHITE,borderRadius:24,padding:"10px 20px",fontWeight:800,fontSize:14,textDecoration:"none",boxShadow:"0 2px 12px rgba(37,211,102,0.3)"}}>
+              <span style={{fontSize:18}}>💬</span>
+              Chat on WhatsApp
+            </a>
+            <div style={{fontSize:11,color:"rgba(255,255,255,0.3)",marginTop:8}}>We'll respond within minutes</div>
+          </div>
           </div>
         )}
         {step===2&&(
@@ -607,9 +619,14 @@ function POSApp({ onLogout }){
 
   async function loadAppointments(){
     setLoadingAppts(true);
-    const data = await db("GET","bookings",null,"?order=created_at.desc");
-    if(data) setAppointments(data);
-    setLoadingAppts(false);
+    try {
+      const data = await db("GET","bookings",null,"?order=created_at.desc&limit=50");
+      if(data && Array.isArray(data)) setAppointments(data);
+    } catch(e) {
+      console.error("Bookings load error:",e);
+    } finally {
+      setLoadingAppts(false);
+    }
   }
   useEffect(()=>{ if(page==="appointments") loadAppointments(); },[page]);
 
@@ -703,7 +720,7 @@ function POSApp({ onLogout }){
   const avgRating=feedbacks.length?(feedbacks.reduce((s,f)=>s+f.rating,0)/feedbacks.length).toFixed(1):"—";
   const pendingCount=appointments.filter(a=>a.status==="pending").length;
   const frequentCustomers=customers.filter(c=>c.visit_count>=4);
-  const atRiskCustomers=customers.filter(c=>{ if(!c.last_visit) return false; const days=(new Date()-new Date(c.last_visit))/(1000*60*60*24); return days>30; });
+  const atRiskCustomers=customers.filter(c=>{ if(!c.last_visit) return false; const days=(new Date()-new Date(c.last_visit))/(1000*60*60*24); return days>28; });
 
   const NAV=[
     {id:"pos",          label:"POS",       icon:"🛒"},
@@ -946,12 +963,12 @@ function POSApp({ onLogout }){
         {page==="customers"&&(
           <div>
             <div style={{fontWeight:900,fontSize:18,color:DARK,marginBottom:4}}>Clients</div>
-            <div style={{fontSize:12,color:"#888",marginBottom:16}}>{customers.length} total · {frequentCustomers.length} regulars · {atRiskCustomers.length} not seen in 30+ days</div>
+            <div style={{fontSize:12,color:"#888",marginBottom:16}}>{customers.length} total · {frequentCustomers.length} regulars · {atRiskCustomers.length} not seen in 28+ days</div>
 
             {/* At-risk clients with WhatsApp button */}
             {atRiskCustomers.length>0&&(
               <div style={{background:"#FFF5F5",borderRadius:12,padding:14,marginBottom:14,border:"1.5px solid #FEE2E2"}}>
-                <div style={{fontWeight:800,fontSize:13,color:RED,marginBottom:10}}>⚠️ Not seen in 30+ days — Send reminder</div>
+                <div style={{fontWeight:800,fontSize:13,color:RED,marginBottom:10}}>⚠️ Not seen in 28+ days — Send reminder</div>
                 {atRiskCustomers.map(c=>(
                   <div key={c.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8,padding:"8px 10px",background:WHITE,borderRadius:8,border:"1px solid #FEE2E2"}}>
                     <div>
