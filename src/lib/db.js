@@ -1,12 +1,26 @@
 // src/lib/db.js
 
-import { SUPABASE_URL, SUPABASE_KEY } from "./constants";
+import { SUPABASE_URL, SUPABASE_KEY, KIMMS_SALON_ID } from "./constants";
+
+// Tables that require salon_id on every write
+const TENANT_TABLES = new Set([
+  "bookings", "customers", "expenses", "feedback",
+  "sales", "services", "staff", "stock", "salon_pins",
+]);
 
 // ── Offline queue ──────────────────────────────────────────────────────────
 export const offlineQueue = [];
 let isSyncing = false;
 
 async function dbDirect(method, table, data = null, filters = "") {
+  // Inject salon_id into all POST/PATCH payloads for tenant-scoped tables
+  let body = data;
+  if (data && (method === "POST" || method === "PATCH") && TENANT_TABLES.has(table)) {
+    body = Array.isArray(data)
+      ? data.map((row) => ({ salon_id: KIMMS_SALON_ID, ...row }))
+      : { salon_id: KIMMS_SALON_ID, ...data };
+  }
+
   const url = `${SUPABASE_URL}/rest/v1/${table}${filters}`;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 8000);
@@ -19,7 +33,7 @@ async function dbDirect(method, table, data = null, filters = "") {
         "Content-Type": "application/json",
         Prefer: method === "POST" ? "return=representation" : "",
       },
-      body: data ? JSON.stringify(data) : undefined,
+      body: body ? JSON.stringify(body) : undefined,
       signal: controller.signal,
     });
     clearTimeout(timeout);
@@ -45,10 +59,6 @@ export async function syncOfflineQueue() {
     }
   }
   isSyncing = false;
-}
-
-if (typeof window !== "undefined") {
-  window.addEventListener("online", syncOfflineQueue);
 }
 
 export async function db(method, table, data = null, filters = "") {
