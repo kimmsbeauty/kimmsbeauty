@@ -9,6 +9,7 @@ import RatingPage from "./pages/RatingPage";
 import DeviceLoginPage from "./pages/DeviceLoginPage";
 import TestSlugPage from "./pages/TestSlugPage"; // TEMPORARY — Step 6 only, delete with the route below
 import { getDeviceLoginStatus } from "./lib/deviceAuth";
+import { SalonGate } from "./lib/SalonContext";
 
 function RedirectToBooking() {
   useEffect(function() { window.location.href = "/booking"; }, []);
@@ -69,11 +70,18 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
+        {/* ── Existing unprefixed routes — kept exactly as-is ── */}
         <Route path="/"            element={<RedirectToBooking />} />
         <Route path="/booking"     element={<BookingPage />} />
         <Route path="/pos"         element={<DeviceGate><StaffRoute /></DeviceGate>} />
         <Route path="/rate/:token" element={<RatingPage />} />
         <Route path="/test-slug"   element={<TestSlugPage />} /> {/* TEMPORARY — Step 6 only, delete once confirmed */}
+
+        {/* ── New slug-prefixed routes (Step 7) ── */}
+        <Route path="/:slug/booking" element={<SalonGate mode="public"><BookingPage /></SalonGate>} />
+        <Route path="/:slug/rate/:token" element={<SalonGate mode="public"><RatingPage /></SalonGate>} />
+        <Route path="/:slug/pos" element={<DeviceGate><SalonGate mode="authenticated"><StaffRoute /></SalonGate></DeviceGate>} />
+
         <Route path="*"            element={<RedirectToBooking />} />
       </Routes>
     </BrowserRouter>
