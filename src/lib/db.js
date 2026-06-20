@@ -2,6 +2,7 @@
 
 import { SUPABASE_URL, SUPABASE_KEY, KIMMS_SALON_ID } from "./constants";
 import { getValidAccessToken } from "./deviceAuth";
+import { getCurrentSalonId } from "./currentSalon";
 
 const TENANT_TABLES = new Set([
   "bookings", "customers", "expenses", "feedback",
@@ -12,16 +13,27 @@ export const offlineQueue = [];
 let isSyncing = false;
 
 async function dbDirect(method, table, data = null, filters = "") {
+  // Resolved by SalonGate for slug-prefixed routes; falls back to
+  // Kimms' fixed ID on the legacy unprefixed routes, where nothing
+  // ever resolves a slug at all.
+  const activeSalonId = getCurrentSalonId() || KIMMS_SALON_ID;
+
   let body = data;
   if (data && (method === "POST" || method === "PATCH") && TENANT_TABLES.has(table)) {
     body = Array.isArray(data)
-      ? data.map((row) => ({ salon_id: KIMMS_SALON_ID, ...row }))
-      : { salon_id: KIMMS_SALON_ID, ...data };
+      ? data.map((row) => ({ salon_id: activeSalonId, ...row }))
+      : { salon_id: activeSalonId, ...data };
+  }
+
+  let finalFilters = filters;
+  if (method === "GET" && TENANT_TABLES.has(table)) {
+    const salonFilter = "salon_id=eq." + activeSalonId;
+    finalFilters = filters ? (filters + "&" + salonFilter) : ("?" + salonFilter);
   }
 
   const deviceToken = await getValidAccessToken();
 
-  const url = `${SUPABASE_URL}/rest/v1/${table}${filters}`;
+  const url = `${SUPABASE_URL}/rest/v1/${table}${finalFilters}`;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 8000);
   try {
