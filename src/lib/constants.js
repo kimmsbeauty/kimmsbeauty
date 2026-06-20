@@ -11,7 +11,6 @@ export const MPESA_GREEN = "#4CAF50";
 export const STAFF_PIN   = "1234";
 export const ADMIN_PIN   = "9999";
 
-// ── Brand Colours ──────────────────────────────────────────────────────────
 export const BLACK    = "#0A0A0A";
 export const GOLD     = "#C9A84C";
 export const GOLD_LT  = "#F0CC6E";
@@ -24,10 +23,8 @@ export const GREEN    = "#22C55E";
 export const RED      = "#EF4444";
 export const AMBER    = "#F59E0B";
 
-// ── Category list ──────────────────────────────────────────────────────────
 export const CATS = ["All", "Hair", "Nails", "Beauty", "Spa", "Barber"];
 
-// ── Fallback data (used if Supabase returns nothing) ──────────────────────
 export const DEFAULT_SERVICES = [
   { id: "SRV001", cat: "Hair",   name: "Hair wash & blow dry",  price: 1000 },
   { id: "SRV002", cat: "Hair",   name: "Hair cutting",           price: 800  },
