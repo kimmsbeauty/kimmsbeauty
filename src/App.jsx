@@ -7,7 +7,8 @@ import KimmsLogo from "./components/KimmsLogo";
 import LoginPage from "./pages/LoginPage";
 import RatingPage from "./pages/RatingPage";
 import DeviceLoginPage from "./pages/DeviceLoginPage";
-import TestSlugPage from "./pages/TestSlugPage"; // TEMPORARY — Step 6 only, delete with the route below
+import TestSlugPage from "./pages/TestSlugPage";
+import OnboardingPage from "./pages/OnboardingPage";
 import { getDeviceLoginStatus } from "./lib/deviceAuth";
 import { SalonGate } from "./lib/SalonContext";
 
@@ -21,12 +22,8 @@ function RedirectToBooking() {
   );
 }
 
-// Sits in front of the PIN screen. Makes sure this device has signed in
-// with the salon's Supabase Auth account before any staff/admin work
-// happens. Re-checks quietly every few minutes in case the 30-day
-// window lapses while the app is left open during a shift.
 function DeviceGate({ children }) {
-  var statusState = useState("checking"); // "checking" | "ok" | "needs-login"
+  var statusState = useState("checking");
   var status      = statusState[0]; var setStatus = statusState[1];
 
   var reauthState = useState(false);
@@ -70,14 +67,13 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* ── Existing unprefixed routes — kept exactly as-is ── */}
         <Route path="/"            element={<RedirectToBooking />} />
         <Route path="/booking"     element={<BookingPage />} />
         <Route path="/pos"         element={<DeviceGate><StaffRoute /></DeviceGate>} />
         <Route path="/rate/:token" element={<RatingPage />} />
-        <Route path="/test-slug"   element={<TestSlugPage />} /> {/* TEMPORARY — Step 6 only, delete once confirmed */}
+        <Route path="/test-slug"   element={<TestSlugPage />} />
+        <Route path="/onboard"     element={<OnboardingPage />} />
 
-        {/* ── New slug-prefixed routes (Step 7) ── */}
         <Route path="/:slug/booking" element={<SalonGate mode="public"><BookingPage /></SalonGate>} />
         <Route path="/:slug/rate/:token" element={<SalonGate mode="public"><RatingPage /></SalonGate>} />
         <Route path="/:slug/pos" element={<DeviceGate><SalonGate mode="authenticated"><StaffRoute /></SalonGate></DeviceGate>} />
