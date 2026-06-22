@@ -19,7 +19,7 @@ function buildReminderMessage(a, salonName) {
 }
 
 export default function TomorrowReminders({ appointments, salonName }) {
-  salonName = salonName || "Kimm's Beauty Parlour";
+  salonName = salonName || "your salon";
   var sentState = useState({}); var sent = sentState[0]; var setSent = sentState[1];
   var collapsedState = useState(false); var collapsed = collapsedState[0]; var setCollapsed = collapsedState[1];
 
