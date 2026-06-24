@@ -64,10 +64,12 @@ export function SalonGate({ mode, children }) {
 
           if (settingsRows && settingsRows.length > 0) {
             resolvedSalon = Object.assign({}, resolvedSalon, {
-              primary_color: settingsRows[0].primary_color,
+              primary_color:   settingsRows[0].primary_color,
               secondary_color: settingsRows[0].secondary_color,
-              logo_url: settingsRows[0].logo_url,
-              tagline: settingsRows[0].tagline,
+              logo_url:        settingsRows[0].logo_url,
+              tagline:         settingsRows[0].tagline,
+              mpesa_till:      settingsRows[0].mpesa_till,
+              mpesa_name:      settingsRows[0].mpesa_name,
             });
           }
         }
