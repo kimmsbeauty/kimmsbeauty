@@ -10,7 +10,7 @@ import { useSalon, fetchPublicSalonBranding } from "../lib/SalonContext";
 import { lighten, darken } from "../lib/colorUtils";
 import {
   CATS,
-  BLACK, GOLD, DARK, WHITE, GREEN, MPESA_GREEN, MPESA_TILL, MPESA_NAME,
+  BLACK, GOLD, DARK, WHITE, GREEN, MPESA_GREEN,
 } from "../lib/constants";
 
 export default function BookingPage() {
@@ -36,6 +36,9 @@ export default function BookingPage() {
   const primaryDim = darken(primary, 18);
   const bgStop3    = lighten(secondary, 3.5);
   const salonName  = (salon && salon.name) || "your salon";
+  const mpesaTill  = (salon && salon.mpesa_till)    || null;
+  const mpesaName  = (salon && salon.mpesa_name)    || salonName;
+  const contactPhone = (salon && salon.contact_phone) || null;
 
   const [step, setStep]             = useState(1);
   const [sel, setSel]               = useState({ service: null, stylist: null, date: "", time: "", name: "", phone: "" });
@@ -101,7 +104,7 @@ export default function BookingPage() {
     // contact line — deferred to Phase 2.5 along with the M-Pesa till
     // number, same decision, not touched in this step.
     const waMessage = encodeURIComponent(
-      `✂ ${salonName}\n\nHi ${sel.name}! Your booking is confirmed 💕\n\nService: ${sel.service?.name}\nStylist: ${sel.stylist || "Any available"}\nDate: ${sel.date}\nTime: ${sel.time}\nPrice: KES ${sel.service?.price?.toLocaleString()}\nPayment: ${paymentStatus === "paid" ? "✅ Paid via M-Pesa" : "Pay at salon"}\n\nWe look forward to seeing you!\nFor enquiries: 0113828280`
+      `✂ ${salonName}\n\nHi ${sel.name}! Your booking is confirmed 💕\n\nService: ${sel.service?.name}\nStylist: ${sel.stylist || "Any available"}\nDate: ${sel.date}\nTime: ${sel.time}\nPrice: KES ${sel.service?.price?.toLocaleString()}\nPayment: ${paymentStatus === "paid" ? "✅ Paid via M-Pesa" : "Pay at salon"}\n\nWe look forward to seeing you!`
     );
     return (
       <div style={{ minHeight: "100vh", background: `linear-gradient(160deg,${BLACK} 0%,${secondary} 100%)`, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
@@ -121,14 +124,14 @@ export default function BookingPage() {
           {paymentStatus === "pay_later" && (
             <div style={{ background: "rgba(76,175,80,0.1)", border: "1.5px solid #4ADE80", borderRadius: 12, padding: "14px", marginBottom: 16 }}>
               <div style={{ fontSize: 13, fontWeight: 700, color: "#4ADE80", marginBottom: 8 }}>Want to pay now?</div>
-              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.6)", marginBottom: 10 }}>Till: <b style={{ color: MPESA_GREEN }}>{MPESA_TILL}</b> · {fmt(sel.service?.price)}</div>
+              {mpesaTill && <div style={{ fontSize: 12, color: "rgba(255,255,255,0.6)", marginBottom: 10 }}>Till: <b style={{ color: MPESA_GREEN }}>{mpesaTill}</b> · {fmt(sel.service?.price)}</div>}
               <button onClick={() => setShowMpesa(true)} style={{ width: "100%", background: MPESA_GREEN, color: WHITE, border: "none", borderRadius: 10, padding: "10px 0", fontWeight: 800, fontSize: 13, cursor: "pointer" }}>📱 Pay via M-Pesa</button>
             </div>
           )}
-          <a href={`https://wa.me/254113828280?text=${waMessage}`} target="_blank" rel="noreferrer"
+          {contactPhone && <a href={`https://wa.me/${contactPhone}?text=${waMessage}`} target="_blank" rel="noreferrer"
             style={{ display: "block", background: "#25D366", color: WHITE, borderRadius: 12, padding: "13px 0", fontWeight: 800, fontSize: 15, textDecoration: "none", marginBottom: 10 }}>
             📲 Confirm via WhatsApp
-          </a>
+          </a>}
           <button onClick={() => { setSel({ service: null, stylist: null, date: "", time: "", name: "", phone: "" }); setStep(1); setDone(false); setPaymentStatus(null); setSavedBooking(null); }}
             style={{ background: "transparent", border: `1px solid ${primaryDim}`, borderRadius: 10, padding: "10px 24px", fontWeight: 700, fontSize: 13, cursor: "pointer", color: "rgba(255,255,255,0.5)" }}>
             Book another
@@ -188,10 +191,10 @@ export default function BookingPage() {
             <div style={{ marginTop: 24, padding: "14px 16px", background: "rgba(255,255,255,0.05)", borderRadius: 14, border: "1px solid rgba(255,255,255,0.1)", textAlign: "center" }}>
               <div style={{ fontSize: 13, color: "rgba(255,255,255,0.6)", marginBottom: 4 }}>Can't find what you're looking for?</div>
               <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginBottom: 12 }}>Our team is happy to help you book the right service</div>
-              <a href={`https://wa.me/254113828280?text=${encodeURIComponent("Help me book at " + salonName)}`} target="_blank" rel="noreferrer"
+              {contactPhone && <a href={`https://wa.me/${contactPhone}?text=${encodeURIComponent("Help me book at " + salonName)}`} target="_blank" rel="noreferrer"
                 style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "#25D366", color: WHITE, borderRadius: 24, padding: "10px 20px", fontWeight: 800, fontSize: 14, textDecoration: "none" }}>
                 <span style={{ fontSize: 18 }}>💬</span> Chat on WhatsApp
-              </a>
+              </a>}
             </div>
           </div>
         )}
@@ -245,7 +248,7 @@ export default function BookingPage() {
             <div style={{ background: "rgba(76,175,80,0.1)", border: "1.5px solid #4ADE80", borderRadius: 12, padding: "12px 14px", marginBottom: 16 }}>
               <div style={{ fontSize: 12, fontWeight: 800, color: "#4ADE80", marginBottom: 4 }}>💳 Payment Options</div>
               <div style={{ fontSize: 12, color: "rgba(255,255,255,0.7)", marginBottom: 2 }}>📱 <b>Lipa na M-Pesa</b> — Pay upfront or at the salon</div>
-              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)" }}>Till: <b style={{ color: MPESA_GREEN }}>{MPESA_TILL}</b> · {MPESA_NAME}</div>
+              {mpesaTill && <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)" }}>Till: <b style={{ color: MPESA_GREEN }}>{mpesaTill}</b> · {mpesaName}</div>}
             </div>
             <GoldBtn onClick={confirm} disabled={saving} style={{ width: "100%" }}>{saving ? "Saving..." : "Confirm Booking 👑"}</GoldBtn>
             <button onClick={() => setStep(3)} style={{ background: "none", border: "none", color: primaryLt, fontSize: 13, cursor: "pointer", marginTop: 8, display: "block" }}>← Back</button>
