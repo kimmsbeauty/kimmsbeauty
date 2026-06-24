@@ -70,6 +70,7 @@ export function SalonGate({ mode, children }) {
               tagline:         settingsRows[0].tagline,
               mpesa_till:      settingsRows[0].mpesa_till,
               mpesa_name:      settingsRows[0].mpesa_name,
+              contact_phone:   settingsRows[0].contact_phone,
             });
           }
         }
