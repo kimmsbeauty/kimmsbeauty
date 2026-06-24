@@ -114,6 +114,12 @@ export default function POSApp({ onLogout, userRole }) {
 
   var loadingApptsState = useState(false); var loadingAppts = loadingApptsState[0]; var setLoadingAppts = loadingApptsState[1];
   var showMpesaConfirmState = useState(false); var showMpesaConfirm = showMpesaConfirmState[0]; var setShowMpesaConfirm = showMpesaConfirmState[1];
+  // STK Push flow states
+  // stkPhase: "idle" | "sending" | "waiting" | "confirmed" | "failed"
+  var stkPhaseState = useState("idle"); var stkPhase = stkPhaseState[0]; var setStkPhase = stkPhaseState[1];
+  var stkCheckoutIdState = useState(null); var stkCheckoutId = stkCheckoutIdState[0]; var setStkCheckoutId = stkCheckoutIdState[1];
+  var stkErrorState = useState(""); var stkError = stkErrorState[0]; var setStkError = stkErrorState[1];
+  var stkPollTimerState = useState(null); var stkPollTimer = stkPollTimerState[0]; var setStkPollTimer = stkPollTimerState[1];
   var timeState = useState(nowTime()); var setTime = timeState[1];
   var toastState = useState(null); var toast = toastState[0]; var setToast = toastState[1];
   var loadErrorState = useState(false); var setLoadError = loadErrorState[1];
@@ -444,7 +450,126 @@ export default function POSApp({ onLogout, userRole }) {
     if (!clientName) return alert("Please enter or select a client");
     if (cart.length === 0) return alert("Cart is empty");
     if (unassignedServiceItems().length > 0) return alert("Please assign a stylist to every service in the cart");
-    if (payMethod === "M-Pesa") { setShowMpesaConfirm(true); } else { completeSale(); }
+    if (payMethod === "M-Pesa") {
+      setStkPhase("idle");
+      setStkCheckoutId(null);
+      setStkError("");
+      setShowMpesaConfirm(true);
+    } else {
+      completeSale();
+    }
+  }
+
+  function closeMpesaModal() {
+    // Stop any active poll timer before closing
+    if (stkPollTimer) { clearInterval(stkPollTimer); setStkPollTimer(null); }
+    setShowMpesaConfirm(false);
+    setStkPhase("idle");
+    setStkCheckoutId(null);
+    setStkError("");
+  }
+
+  async function initiateStkPush() {
+    if (!clientPhone) {
+      // No phone — fall back to manual flow (show till number, staff confirms)
+      setStkPhase("manual");
+      return;
+    }
+    var salonId = salon && salon.id;
+    if (!salonId) {
+      setStkPhase("manual");
+      return;
+    }
+
+    setStkPhase("sending");
+    setStkError("");
+
+    try {
+      var res = await fetch(SUPABASE_URL + "/functions/v1/mpesa-stk-push", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "apikey": SUPABASE_KEY,
+          "Authorization": "Bearer " + SUPABASE_KEY,
+        },
+        body: JSON.stringify({
+          salon_id:  salonId,
+          amount:    Math.ceil(cartTotal),
+          phone:     clientPhone,
+          reference: clientName.slice(0, 12),
+        }),
+      });
+
+      var data = await res.json();
+
+      if (!res.ok || !data.success) {
+        // STK Push not configured or failed — fall back to manual
+        console.warn("STK Push failed, falling back to manual:", data.error);
+        setStkPhase("manual");
+        return;
+      }
+
+      setStkCheckoutId(data.checkout_request_id);
+      setStkPhase("waiting");
+      startPolling(data.checkout_request_id);
+
+    } catch (err) {
+      console.error("STK Push error:", err);
+      setStkPhase("manual");
+    }
+  }
+
+  function startPolling(checkoutRequestId) {
+    // Poll salon_mpesa_payments every 3 seconds for up to 2 minutes
+    var attempts = 0;
+    var maxAttempts = 40; // 40 × 3s = 120s
+
+    var timer = setInterval(async function() {
+      attempts++;
+      try {
+        var rows = await fetch(
+          SUPABASE_URL + "/rest/v1/salon_mpesa_payments?checkout_request_id=eq." +
+          encodeURIComponent(checkoutRequestId) + "&select=status,mpesa_receipt,result_desc&limit=1",
+          {
+            headers: {
+              "apikey": SUPABASE_KEY,
+              "Authorization": "Bearer " + SUPABASE_KEY,
+            },
+          }
+        ).then(function(r) { return r.json(); });
+
+        var row = rows && rows[0];
+        if (row) {
+          if (row.status === "confirmed") {
+            clearInterval(timer); setStkPollTimer(null);
+            setStkPhase("confirmed");
+            // Auto-complete the sale after a brief moment so the user sees confirmation
+            setTimeout(function() {
+              setShowMpesaConfirm(false);
+              setStkPhase("idle");
+              completeSale();
+            }, 2000);
+            return;
+          }
+          if (row.status === "failed") {
+            clearInterval(timer); setStkPollTimer(null);
+            setStkError(row.result_desc || "Payment was not completed. Please try again.");
+            setStkPhase("failed");
+            return;
+          }
+        }
+      } catch (err) {
+        console.error("Polling error:", err);
+      }
+
+      if (attempts >= maxAttempts) {
+        clearInterval(timer); setStkPollTimer(null);
+        setStkError("Payment timed out. Ask the customer to try again, or collect cash.");
+        setStkPhase("failed");
+      }
+    }, 3000);
+
+    setStkPollTimer(timer);
   }
 
   async function adjustStock(id, delta) {
@@ -513,33 +638,131 @@ export default function POSApp({ onLogout, userRole }) {
         </div>
       )}
 
-      {/* M-Pesa Confirm */}
+      {/* M-Pesa / STK Push Modal */}
       {showMpesaConfirm && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 1500, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
           <div style={{ background: WHITE, borderRadius: "20px 20px 0 0", padding: "24px 20px 32px", width: "100%", maxWidth: 480, maxHeight: "85vh", overflowY: "auto", borderTop: "3px solid " + GOLD }}>
+
+            {/* Amount breakdown — always visible */}
             <div style={{ textAlign: "center", marginBottom: 16 }}>
-              <div style={{ fontSize: 16, fontWeight: 900, color: DARK }}>Confirm M-Pesa Payment</div>
-              <div style={{ fontSize: 12, color: "#888", marginTop: 2 }}>Show this to the customer</div>
+              <div style={{ fontSize: 16, fontWeight: 900, color: DARK }}>
+                {stkPhase === "confirmed" ? "✅ Payment Confirmed!" :
+                 stkPhase === "waiting"   ? "📱 Waiting for Payment..." :
+                 stkPhase === "sending"   ? "📡 Sending STK Push..." :
+                 "M-Pesa Payment"}
+              </div>
+              {stkPhase === "idle" || stkPhase === "manual" || stkPhase === "failed" ? (
+                <div style={{ fontSize: 12, color: "#888", marginTop: 2 }}>
+                  {stkPhase === "manual" ? "Show till number to customer" : "Confirm amount below"}
+                </div>
+              ) : null}
             </div>
-            {/* Breakdown */}
+
+            {/* Amount breakdown */}
             <div style={{ background: "#F9FAFB", borderRadius: 10, padding: "10px 14px", marginBottom: 12, fontSize: 12 }}>
               {serviceTotal > 0 && <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}><span style={{ color: "#888" }}>Services</span><span>{fmt(serviceTotal)}</span></div>}
               {discountAmt > 0 && <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4, color: GREEN }}><span>Discount {discountType === "pct" ? "(" + discountNum + "%)" : "(Fixed)"}{discountReason ? " — " + discountReason : ""}</span><span>- {fmt(discountAmt)}</span></div>}
               {productTotal > 0 && <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}><span style={{ color: "#888" }}>Products</span><span>{fmt(productTotal)}</span></div>}
-              <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 900, fontSize: 14, borderTop: "1px dashed #ddd", paddingTop: 6, marginTop: 4 }}><span>Total</span><span style={{ color: GOLD_DIM }}>{fmt(cartTotal)}</span></div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 900, fontSize: 14, borderTop: "1px dashed #ddd", paddingTop: 6, marginTop: 4 }}>
+                <span>Total</span><span style={{ color: GOLD_DIM }}>{fmt(cartTotal)}</span>
+              </div>
             </div>
-            <MpesaInstructions amount={cartTotal} reference={clientName} salon={salon} />
-            {commission > 0 && (
-              <div style={{ marginTop: 10, background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 8, padding: "8px 12px", fontSize: 12, color: "#92400E" }}>
-                Staff commission: <b>{fmt(commission)}</b> (on post-discount services)
+
+            {/* ── IDLE: offer STK Push or manual ── */}
+            {stkPhase === "idle" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {clientPhone ? (
+                  <button onClick={initiateStkPush} style={{ width: "100%", background: MPESA_GREEN, color: WHITE, border: "none", borderRadius: 12, padding: "14px 0", fontWeight: 900, fontSize: 15, cursor: "pointer" }}>
+                    📱 Send STK Push to {clientPhone}
+                  </button>
+                ) : (
+                  <div style={{ background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 8, padding: "10px 12px", fontSize: 12, color: "#92400E", marginBottom: 4 }}>
+                    ⚠️ No phone number — cannot send STK Push. Show till number below.
+                  </div>
+                )}
+                <button onClick={function() { setStkPhase("manual"); }} style={{ width: "100%", background: WHITE, color: MPESA_GREEN, border: "1.5px solid " + MPESA_GREEN, borderRadius: 12, padding: "12px 0", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+                  Show Till Number Instead
+                </button>
+                <button onClick={closeMpesaModal} style={{ width: "100%", background: WHITE, color: "#888", border: "1.5px solid " + GOLD_DIM, borderRadius: 12, padding: "12px 0", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>Go Back</button>
               </div>
             )}
-            <div style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 10 }}>
-              <button onClick={completeSale} style={{ width: "100%", background: MPESA_GREEN, color: WHITE, border: "none", borderRadius: 12, padding: "14px 0", fontWeight: 900, fontSize: 15, cursor: "pointer" }}>
-                Payment Received — Complete Sale ({fmt(cartTotal)})
-              </button>
-              <button onClick={function() { setShowMpesaConfirm(false); }} style={{ width: "100%", background: WHITE, color: "#888", border: "1.5px solid " + GOLD_DIM, borderRadius: 12, padding: "12px 0", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>Go Back</button>
-            </div>
+
+            {/* ── SENDING: spinner ── */}
+            {stkPhase === "sending" && (
+              <div style={{ textAlign: "center", padding: "24px 0" }}>
+                <div style={{ fontSize: 40, marginBottom: 12 }}>📡</div>
+                <div style={{ fontSize: 14, color: "#555" }}>Sending push notification to<br /><b>{clientPhone}</b>...</div>
+              </div>
+            )}
+
+            {/* ── WAITING: polling ── */}
+            {stkPhase === "waiting" && (
+              <div>
+                <div style={{ textAlign: "center", padding: "20px 0" }}>
+                  <div style={{ fontSize: 40, marginBottom: 12 }}>⏳</div>
+                  <div style={{ fontSize: 14, color: "#555", lineHeight: 1.6 }}>
+                    Ask the customer to check their phone and<br />
+                    <b>enter their M-Pesa PIN</b> to confirm.
+                  </div>
+                  <div style={{ fontSize: 11, color: "#aaa", marginTop: 8 }}>Waiting for Safaricom confirmation...</div>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 8 }}>
+                  <button onClick={function() {
+                    if (stkPollTimer) { clearInterval(stkPollTimer); setStkPollTimer(null); }
+                    setStkPhase("manual");
+                  }} style={{ width: "100%", background: WHITE, color: MPESA_GREEN, border: "1.5px solid " + MPESA_GREEN, borderRadius: 12, padding: "12px 0", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+                    Show Till Number Instead
+                  </button>
+                  <button onClick={closeMpesaModal} style={{ width: "100%", background: WHITE, color: "#888", border: "1.5px solid " + GOLD_DIM, borderRadius: 12, padding: "12px 0", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>Cancel</button>
+                </div>
+              </div>
+            )}
+
+            {/* ── CONFIRMED: auto-completing ── */}
+            {stkPhase === "confirmed" && (
+              <div style={{ textAlign: "center", padding: "24px 0" }}>
+                <div style={{ fontSize: 48, marginBottom: 12 }}>✅</div>
+                <div style={{ fontSize: 15, fontWeight: 800, color: "#166534" }}>Payment Received!</div>
+                <div style={{ fontSize: 12, color: "#888", marginTop: 6 }}>Completing sale...</div>
+              </div>
+            )}
+
+            {/* ── FAILED: error + options ── */}
+            {stkPhase === "failed" && (
+              <div>
+                <div style={{ background: "#FEE2E2", borderRadius: 10, padding: "12px 14px", marginBottom: 12, fontSize: 13, color: "#991B1B", fontWeight: 700 }}>
+                  ❌ {stkError}
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  <button onClick={initiateStkPush} style={{ width: "100%", background: MPESA_GREEN, color: WHITE, border: "none", borderRadius: 12, padding: "14px 0", fontWeight: 900, fontSize: 14, cursor: "pointer" }}>
+                    🔄 Retry STK Push
+                  </button>
+                  <button onClick={function() { setStkPhase("manual"); }} style={{ width: "100%", background: WHITE, color: MPESA_GREEN, border: "1.5px solid " + MPESA_GREEN, borderRadius: 12, padding: "12px 0", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+                    Show Till Number Instead
+                  </button>
+                  <button onClick={closeMpesaModal} style={{ width: "100%", background: WHITE, color: "#888", border: "1.5px solid " + GOLD_DIM, borderRadius: 12, padding: "12px 0", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>Cancel</button>
+                </div>
+              </div>
+            )}
+
+            {/* ── MANUAL: show till number, staff confirms ── */}
+            {stkPhase === "manual" && (
+              <div>
+                <MpesaInstructions amount={cartTotal} reference={clientName} salon={salon} />
+                {commission > 0 && (
+                  <div style={{ marginTop: 10, background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 8, padding: "8px 12px", fontSize: 12, color: "#92400E" }}>
+                    Staff commission: <b>{fmt(commission)}</b> (on post-discount services)
+                  </div>
+                )}
+                <div style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 10 }}>
+                  <button onClick={function() { closeMpesaModal(); completeSale(); }} style={{ width: "100%", background: MPESA_GREEN, color: WHITE, border: "none", borderRadius: 12, padding: "14px 0", fontWeight: 900, fontSize: 15, cursor: "pointer" }}>
+                    Payment Received — Complete Sale ({fmt(cartTotal)})
+                  </button>
+                  <button onClick={closeMpesaModal} style={{ width: "100%", background: WHITE, color: "#888", border: "1.5px solid " + GOLD_DIM, borderRadius: 12, padding: "12px 0", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>Go Back</button>
+                </div>
+              </div>
+            )}
+
           </div>
         </div>
       )}
