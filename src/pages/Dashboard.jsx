@@ -62,7 +62,7 @@ function filterByRange(items, range, dateField) {
   });
 }
 
-export default function Dashboard({ sales, customers, staffList, products, feedbacks, expenses, darkMode }) {
+export default function Dashboard({ sales, customers, staffList, products, feedbacks, expenses, darkMode, salonName }) {
   expenses = expenses || [];
 
   var presetState = useState("today"); var preset = presetState[0]; var setPreset = presetState[1];
@@ -150,7 +150,7 @@ export default function Dashboard({ sales, customers, staffList, products, feedb
               return <button key={p.id} onClick={function(){ setPreset(p.id); setShowCustom(p.id==="custom"); }} style={{ padding:"7px 14px", borderRadius:20, border:"1.5px solid "+(isActive?GOLD:GOLD_DIM+"66"), background:isActive?"linear-gradient(135deg,"+GOLD+","+GOLD_LT+")":"transparent", color:isActive?BLACK:TEXT, fontSize:12, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap", flexShrink:0 }}>{p.label}</button>;
             })}
           </div>
-          <ExportButton sales={filteredSales} staffList={staffList} rangeLabel={rangeLabel} />
+          <ExportButton sales={filteredSales} staffList={staffList} rangeLabel={rangeLabel} salonName={salonName} />
         </div>
         {showCustom && (
           <div style={{ display:"flex", gap:8, marginTop:10, alignItems:"center", flexWrap:"wrap" }}>
@@ -191,7 +191,7 @@ export default function Dashboard({ sales, customers, staffList, products, feedb
 
       {/* End-of-Day Summary button */}
       <div style={{ marginBottom:12 }}>
-        <EndOfDaySummary sales={sales} expenses={expenses} staffList={staffList} customers={customers} />
+        <EndOfDaySummary sales={sales} expenses={expenses} staffList={staffList} customers={customers} salonName={salonName} />
       </div>
 
       {/* KPI Grid */}
