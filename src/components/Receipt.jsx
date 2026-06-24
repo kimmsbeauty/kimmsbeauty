@@ -1,12 +1,13 @@
 // src/components/Receipt.jsx
 
-import KimmsLogo from "./KimmsLogo";
+import SalonBrandmark from "./SalonBrandmark";
 import GoldBtn from "./GoldBtn";
 import MpesaInstructions from "./MpesaInstructions";
-import { WHITE, DARK, GOLD_DIM, CREAM, GREEN, RED } from "../lib/constants.js";
+import { WHITE, DARK, GOLD, CREAM } from "../lib/constants.js";
+import { darken } from "../lib/colorUtils";
 import { fmt } from "../lib/utils.js";
 
-export default function Receipt({ sale, onClose, onSendFeedback }) {
+export default function Receipt({ salon, sale, onClose, onSendFeedback }) {
   var items        = Array.isArray(sale.items) ? sale.items : [];
   var serviceItems = items.filter(function(i){ return i && i.type === "service"; });
   var productItems = items.filter(function(i){ return i && i.type === "product"; });
@@ -25,13 +26,21 @@ export default function Receipt({ sale, onClose, onSendFeedback }) {
   var discountValue  = sale.discount_value || 0;
   var hasBreakdown   = serviceItems.length > 0 && productItems.length > 0;
 
+  // logo_url null → SalonBrandmark falls back to a plain text wordmark.
+  // Tagline now comes from real salon data, conditionally rendered —
+  // the old hardcoded "Beauty That Speaks Confidence" is gone entirely,
+  // including for Kimms, per the no-special-casing decision.
+  var tagline    = salon && salon.tagline;
+  var primary    = (salon && salon.primary_color) || GOLD;
+  var primaryDim = darken(primary, 18);
+
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center" }}>
       <div style={{ background: WHITE, borderRadius: 16, padding: 28, width: 340, maxHeight: "85vh", overflowY: "auto" }}>
 
         {/* Header */}
         <div style={{ textAlign: "center", marginBottom: 16 }}>
-          <KimmsLogo size="sm" dark={true} />
+          <SalonBrandmark salon={salon} size="sm" dark={true} />
           <div style={{ fontSize: 11, color: "#888", marginTop: 8 }}>Receipt · {sale.date} · {sale.time}</div>
           <div style={{ borderBottom: "2px dashed #ddd", margin: "12px 0" }} />
         </div>
@@ -48,7 +57,7 @@ export default function Receipt({ sale, onClose, onSendFeedback }) {
         {/* Services */}
         {serviceItems.length > 0 && (
           <div style={{ marginBottom: 8 }}>
-            {hasBreakdown && <div style={{ fontSize: 10, fontWeight: 800, color: GOLD_DIM, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Services</div>}
+            {hasBreakdown && <div style={{ fontSize: 10, fontWeight: 800, color: primaryDim, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Services</div>}
             {serviceItems.map(function(it, i) {
               if (!it || !it.name) return null;
               var qty = it.qty || 1; var price = it.price || 0;
@@ -105,7 +114,7 @@ export default function Receipt({ sale, onClose, onSendFeedback }) {
         {/* Total */}
         <div style={{ borderBottom: "2px dashed #ddd", margin: "10px 0" }} />
         <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 900, fontSize: 16, color: DARK }}>
-          <span>TOTAL</span><span style={{ color: GOLD_DIM }}>{fmt(sale.total)}</span>
+          <span>TOTAL</span><span style={{ color: primaryDim }}>{fmt(sale.total)}</span>
         </div>
 
         {/* Commission */}
@@ -133,9 +142,11 @@ export default function Receipt({ sale, onClose, onSendFeedback }) {
         )}
 
         <div style={{ borderBottom: "1px solid #eee", margin: "12px 0" }} />
-        <div style={{ textAlign: "center", fontSize: 12, color: "#aaa", marginBottom: 16, fontStyle: "italic" }}>
-          "Beauty That Speaks Confidence" 👑
-        </div>
+        {tagline && (
+          <div style={{ textAlign: "center", fontSize: 12, color: "#aaa", marginBottom: 16, fontStyle: "italic" }}>
+            "{tagline}" 👑
+          </div>
+        )}
 
         {sale.feedback_token && onSendFeedback && (
           <button
@@ -147,7 +158,7 @@ export default function Receipt({ sale, onClose, onSendFeedback }) {
         )}
 
         <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={function(){ window.print(); }} style={{ flex: 1, background: CREAM, border: "1.5px solid " + GOLD_DIM, borderRadius: 10, padding: "11px 0", fontWeight: 700, fontSize: 13, cursor: "pointer", color: GOLD_DIM }}>🖨️ Print</button>
+          <button onClick={function(){ window.print(); }} style={{ flex: 1, background: CREAM, border: "1.5px solid " + primaryDim, borderRadius: 10, padding: "11px 0", fontWeight: 700, fontSize: 13, cursor: "pointer", color: primaryDim }}>🖨️ Print</button>
           <GoldBtn onClick={onClose} style={{ flex: 2 }}>Close</GoldBtn>
         </div>
 
