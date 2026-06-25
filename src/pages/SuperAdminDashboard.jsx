@@ -74,17 +74,16 @@ export default function SuperAdminDashboard({ onLogout }) {
   async function suspendSalon(salon, reason) {
     setActionLoading(true);
     var token = (await import("../lib/superAdminAuth")).getSuperAdminToken();
-    var res = await fetch(SUPABASE_URL + "/rest/v1/salons?id=eq." + salon.id, {
-      method: "PATCH",
+    var res = await fetch(SUPABASE_URL + "/rest/v1/rpc/suspend_salon", {
+      method: "POST",
       headers: {
-        apikey: SUPABASE_KEY,
-        Authorization: "Bearer " + token,
+        apikey:         SUPABASE_KEY,
+        Authorization:  "Bearer " + token,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        suspended:        true,
-        suspended_at:     new Date().toISOString(),
-        suspended_reason: reason || "Suspended by admin",
+        p_salon_id: salon.id,
+        p_reason:   reason || "Suspended by admin",
       }),
     });
     setActionLoading(false);
@@ -93,29 +92,30 @@ export default function SuperAdminDashboard({ onLogout }) {
       setSuspendReason("");
       await loadData();
     } else {
-      alert("Failed to suspend salon. Please try again.");
+      var err = await res.json().catch(function() { return {}; });
+      alert("Failed to suspend salon: " + (err.message || res.status));
     }
   }
 
   async function reactivateSalon(salon) {
     setActionLoading(true);
     var token = (await import("../lib/superAdminAuth")).getSuperAdminToken();
-    var res = await fetch(SUPABASE_URL + "/rest/v1/salons?id=eq." + salon.id, {
-      method: "PATCH",
+    var res = await fetch(SUPABASE_URL + "/rest/v1/rpc/reactivate_salon", {
+      method: "POST",
       headers: {
-        apikey: SUPABASE_KEY,
-        Authorization: "Bearer " + token,
+        apikey:         SUPABASE_KEY,
+        Authorization:  "Bearer " + token,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        suspended:        false,
-        suspended_at:     null,
-        suspended_reason: null,
-      }),
+      body: JSON.stringify({ p_salon_id: salon.id }),
     });
     setActionLoading(false);
-    if (res.ok) { await loadData(); }
-    else { alert("Failed to reactivate salon."); }
+    if (res.ok) {
+      await loadData();
+    } else {
+      var err = await res.json().catch(function() { return {}; });
+      alert("Failed to reactivate salon: " + (err.message || res.status));
+    }
   }
 
   function handleLogout() {
