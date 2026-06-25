@@ -51,8 +51,7 @@ export function SalonGate({ mode, children }) {
 
     async function resolve() {
       setStatus("checking");
-      var table = mode === "public" ? "public_salon_directory" : "salons";
-      var rows = await db("GET", table, null, "?slug=eq." + encodeURIComponent(slug) + "&limit=1");
+      var rows = await db("GET", "public_salon_directory", null, "?slug=eq." + encodeURIComponent(slug) + "&limit=1");
       if (cancelled) return;
 
       if (rows && rows.length > 0) {
