@@ -94,6 +94,7 @@ export default function POSApp({ onLogout, userRole }) {
   var discountReasonState = useState(""); var discountReason = discountReasonState[0]; var setDiscountReason = discountReasonState[1];
 
   var salesState = useState([]); var sales = salesState[0]; var setSales = salesState[1];
+  var postSaleCampaignState = useState(null); var postSaleCampaign = postSaleCampaignState[0]; var setPostSaleCampaign = postSaleCampaignState[1];
   var productsState = useState([]); var products = productsState[0]; var setProducts = productsState[1];
   var feedbacksState = useState([]); var feedbacks = feedbacksState[0]; var setFeedbacks = feedbacksState[1];
   var appointmentsState = useState([]); var appointments = appointmentsState[0]; var setAppointments = appointmentsState[1];
@@ -158,6 +159,7 @@ export default function POSApp({ onLogout, userRole }) {
           db("GET", "staff",     null, "?active=eq.true&order=created_at.asc"),
           db("GET", "services",  null, "?active=eq.true&order=cat.asc,name.asc"),
           db("GET", "expenses",  null, "?order=date.desc&limit=200"),
+          db("GET", "marketing_campaigns", null, "?type=eq.post_sale&is_active=eq.true&limit=1"),
         ]);
         if (results[0]) setSales(results[0]);
         if (results[1] && results[1].length > 0) setProducts(results[1]);
@@ -166,6 +168,7 @@ export default function POSApp({ onLogout, userRole }) {
         if (Array.isArray(results[4])) setStaffList(results[4]);
         if (Array.isArray(results[5])) setServicesList(results[5]);
         if (results[6]) setExpenses(results[6]);
+        if (Array.isArray(results[7]) && results[7][0]) setPostSaleCampaign(results[7][0]);
       } catch (e) {
         console.error("Load error:", e);
         setLoadError(true);
@@ -204,6 +207,9 @@ export default function POSApp({ onLogout, userRole }) {
     showToast(clientName + " added as new client!");
   }
 
+  var receiptCustomerState = useState(null); var receiptCustomer = receiptCustomerState[0]; var setReceiptCustomer = receiptCustomerState[1];
+  var thankYouStatusState = useState("idle"); var thankYouStatus = thankYouStatusState[0]; var setThankYouStatus = thankYouStatusState[1];
+
   async function updateCustomerAfterSale(total) {
     if (!selectedCustomer || !selectedCustomer.id) return;
     try {
@@ -213,6 +219,38 @@ export default function POSApp({ onLogout, userRole }) {
       setCustomers(function(p) { return p.map(function(c) { return c.id === selectedCustomer.id ? Object.assign({}, c, { visit_count: newVisits, total_spend: newSpend, last_visit: todayStr() }) : c; }); });
     } catch (e) { console.error("Update customer error:", e); }
   }
+
+  // Manual, operator-triggered post-sale thank-you message — tapped from
+  // the receipt screen rather than firing automatically. Same underlying
+  // campaign/edge-function infra as full automation will use later; this
+  // just keeps a human in the loop on every send for now.
+  async function sendPostSaleMessage() {
+    if (!postSaleCampaign || !receiptCustomer || !receiptCustomer.id) return;
+    var salonId = salon && salon.id;
+    if (!salonId) return;
+    setThankYouStatus("sending");
+    try {
+      var res = await fetch(SUPABASE_URL + "/functions/v1/send-marketing-message", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: SUPABASE_KEY,
+          Authorization: "Bearer " + SUPABASE_KEY,
+        },
+        body: JSON.stringify({
+          campaign_id: postSaleCampaign.id,
+          customer_id: receiptCustomer.id,
+          salon_id: salonId,
+        }),
+      });
+      var data = await res.json().catch(function() { return {}; });
+      setThankYouStatus(data && data.success ? "sent" : "error");
+    } catch (e) {
+      console.error("Post-sale message error:", e);
+      setThankYouStatus("error");
+    }
+  }
+
 
   async function loadAppointments() {
     setLoadingAppts(true);
@@ -445,6 +483,8 @@ export default function POSApp({ onLogout, userRole }) {
         }
       }
       await updateCustomerAfterSale(cartTotal);
+      setReceiptCustomer(selectedCustomer);
+      setThankYouStatus("idle");
       setReceipt(newSale);
       resetCart();
       showToast("Sale of " + fmt(cartTotal) + " saved! 🎉");
@@ -632,7 +672,10 @@ export default function POSApp({ onLogout, userRole }) {
         <Receipt
           salon={salon}
           sale={receipt}
-          onClose={function() { setReceipt(null); }}
+          onClose={function() { setReceipt(null); setReceiptCustomer(null); setThankYouStatus("idle"); }}
+          canSendThankYou={!!(postSaleCampaign && receiptCustomer && receiptCustomer.id && !receiptCustomer.marketing_opt_out)}
+          thankYouStatus={thankYouStatus}
+          onSendThankYou={sendPostSaleMessage}
           onSendFeedback={function() {
             if (!receipt.client_phone) { alert("No phone number on file for this client."); return; }
             sendFeedbackRequest(receipt.client_phone, (receipt.client || "").split(" ")[0], receipt.feedback_token);

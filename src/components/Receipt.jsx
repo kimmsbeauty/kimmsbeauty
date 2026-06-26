@@ -7,7 +7,7 @@ import { WHITE, DARK, GOLD, CREAM } from "../lib/constants.js";
 import { darken } from "../lib/colorUtils";
 import { fmt } from "../lib/utils.js";
 
-export default function Receipt({ salon, sale, onClose, onSendFeedback }) {
+export default function Receipt({ salon, sale, onClose, onSendFeedback, canSendThankYou, thankYouStatus, onSendThankYou }) {
   var items        = Array.isArray(sale.items) ? sale.items : [];
   var serviceItems = items.filter(function(i){ return i && i.type === "service"; });
   var productItems = items.filter(function(i){ return i && i.type === "product"; });
@@ -138,6 +138,30 @@ export default function Receipt({ salon, sale, onClose, onSendFeedback }) {
             style={{ width: "100%", background: "#25D366", color: WHITE, border: "none", borderRadius: 10, padding: "12px 0", fontWeight: 800, fontSize: 13, cursor: "pointer", marginBottom: 8, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}
           >
             <span style={{ fontSize: 16 }}>📱</span> Send Feedback Link via WhatsApp
+          </button>
+        )}
+
+        {canSendThankYou && onSendThankYou && (
+          <button
+            onClick={onSendThankYou}
+            disabled={thankYouStatus === "sending" || thankYouStatus === "sent"}
+            style={{
+              width: "100%",
+              background: thankYouStatus === "sent" ? "#DCFCE7" : thankYouStatus === "error" ? "#FEE2E2" : primaryDim,
+              color: thankYouStatus === "sent" ? "#166534" : thankYouStatus === "error" ? "#991B1B" : WHITE,
+              border: "none", borderRadius: 10, padding: "12px 0", fontWeight: 800, fontSize: 13,
+              cursor: (thankYouStatus === "sending" || thankYouStatus === "sent") ? "default" : "pointer",
+              marginBottom: 8, display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+              opacity: thankYouStatus === "sending" ? 0.7 : 1,
+            }}
+          >
+            <span style={{ fontSize: 16 }}>
+              {thankYouStatus === "sent" ? "✅" : thankYouStatus === "error" ? "⚠️" : "💬"}
+            </span>
+            {thankYouStatus === "sending" ? "Sending…"
+              : thankYouStatus === "sent" ? "Thank-You SMS Sent"
+              : thankYouStatus === "error" ? "Failed — Tap to Retry"
+              : "Send Thank-You SMS"}
           </button>
         )}
 
