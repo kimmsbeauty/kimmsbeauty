@@ -7,6 +7,7 @@ import { BLACK, GOLD, GOLD_DIM, WHITE, RED, DARK } from "../lib/constants";
 export default function SuperAdminLogin({ onSuccess }) {
   var [email,    setEmail]    = useState("");
   var [password, setPassword] = useState("");
+  var [showPass, setShowPass] = useState(false);
   var [error,    setError]    = useState("");
   var [loading,  setLoading]  = useState(false);
 
@@ -64,22 +65,28 @@ export default function SuperAdminLogin({ onSuccess }) {
           }}
         />
 
-        <input
-          type="password"
-          placeholder="Password"
-          value={password}
-          onChange={function(e) { setPassword(e.target.value); setError(""); }}
-          onKeyDown={function(e) { if (e.key === "Enter") handleLogin(); }}
-          disabled={loading}
-          style={{
-            width: "100%", borderRadius: 10,
-            border: "1.5px solid " + (error ? RED : GOLD_DIM + "44"),
-            background: "rgba(255,255,255,0.05)",
-            padding: "13px 14px", fontSize: 14,
-            boxSizing: "border-box", fontFamily: "inherit",
-            outline: "none", color: WHITE, marginBottom: 12,
-          }}
-        />
+        <div style={{ position: "relative", marginBottom: 12 }}>
+          <input
+            type={showPass ? "text" : "password"}
+            placeholder="Password"
+            value={password}
+            onChange={function(e) { setPassword(e.target.value); setError(""); }}
+            onKeyDown={function(e) { if (e.key === "Enter") handleLogin(); }}
+            disabled={loading}
+            style={{
+              width: "100%", borderRadius: 10,
+              border: "1.5px solid " + (error ? RED : GOLD_DIM + "44"),
+              background: "rgba(255,255,255,0.05)",
+              padding: "13px 44px 13px 14px", fontSize: 14,
+              boxSizing: "border-box", fontFamily: "inherit",
+              outline: "none", color: WHITE,
+            }}
+          />
+          <button onClick={function() { setShowPass(!showPass); }} type="button"
+            style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "rgba(255,255,255,0.4)", padding: 0, lineHeight: 1 }}>
+            {showPass ? "🙈" : "👁"}
+          </button>
+        </div>
 
         {error && (
           <div style={{
