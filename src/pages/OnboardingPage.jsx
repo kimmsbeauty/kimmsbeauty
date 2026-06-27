@@ -41,6 +41,7 @@ export default function OnboardingPage() {
   // ── UI state ─────────────────────────────────────────────────────
   var [showPass,  setShowPass]  = useState(false);
   var [termsAccepted, setTermsAccepted] = useState(false);
+  var [fatalError, setFatalError] = useState("");
   var [loading,      setLoading]      = useState(false);
   var [needsConfirm, setNeedsConfirm] = useState(false);
 
@@ -58,12 +59,21 @@ export default function OnboardingPage() {
       try {
         var res = await fetch(SUPABASE_URL + "/rest/v1/rpc/validate_invite", {
           method: "POST",
-          headers: { apikey: SUPABASE_KEY, "Content-Type": "application/json" },
+          headers: {
+            apikey:         SUPABASE_KEY,
+            "Content-Type": "application/json",
+          },
           body: JSON.stringify({ p_token: token }),
         });
+
+        if (!res.ok) {
+          setTokenStatus("invalid");
+          return;
+        }
+
         var data = await res.json();
 
-        if (res.ok && data && data.valid) {
+        if (data && data.valid) {
           setInviteToken(token);
           if (data.email)      setEmail(data.email);
           if (data.salon_name) setSalonName(data.salon_name);
@@ -72,6 +82,7 @@ export default function OnboardingPage() {
           setTokenStatus("invalid");
         }
       } catch (e) {
+        console.error("Token validation error:", e);
         setTokenStatus("invalid");
       }
     }
@@ -188,8 +199,23 @@ export default function OnboardingPage() {
 
     } catch (e) {
       setLoading(false);
-      setError("Could not reach server. Check your connection.");
+      console.error("Onboarding error:", e);
+      setError("Unexpected error: " + (e.message || "Please try again or contact support."));
     }
+  }
+
+  // ── FATAL ERROR ──────────────────────────────────────────────────
+  if (fatalError) {
+    return (
+      <div style={{ minHeight: "100vh", background: "linear-gradient(160deg," + BLACK + " 0%,#1A1400 100%)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+        <div style={{ background: "rgba(255,255,255,0.04)", border: "1.5px solid " + RED, borderRadius: 24, padding: 36, maxWidth: 340, width: "100%", textAlign: "center" }}>
+          <div style={{ fontSize: 40, marginBottom: 12 }}>⚠️</div>
+          <div style={{ fontSize: 16, fontWeight: 900, color: RED, marginBottom: 10 }}>Something went wrong</div>
+          <div style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", marginBottom: 20, lineHeight: 1.6 }}>{fatalError}</div>
+          <a href="mailto:admin@trimorasystems.com" style={{ color: GOLD, fontWeight: 800, fontSize: 13 }}>Contact support →</a>
+        </div>
+      </div>
+    );
   }
 
   // ── CHECKING token ───────────────────────────────────────────────
