@@ -40,6 +40,7 @@ export default function OnboardingPage() {
 
   // ── UI state ─────────────────────────────────────────────────────
   var [showPass,  setShowPass]  = useState(false);
+  var [termsAccepted, setTermsAccepted] = useState(false);
   var [loading,      setLoading]      = useState(false);
   var [needsConfirm, setNeedsConfirm] = useState(false);
 
@@ -86,6 +87,7 @@ export default function OnboardingPage() {
     if (!/^\d{4,6}$/.test(staffPin)) return "Staff PIN must be 4–6 digits.";
     if (!/^\d{4,6}$/.test(adminPin)) return "Admin PIN must be 4–6 digits.";
     if (staffPin === adminPin) return "Staff and admin PINs must be different.";
+    if (!termsAccepted) return "Please read and accept the Terms & Conditions to continue.";
     return null;
   }
 
@@ -297,12 +299,31 @@ export default function OnboardingPage() {
           </div>
         )}
 
-        <GoldBtn onClick={handleSignup} disabled={loading} style={{ width: "100%", marginTop: 8 }}>
+        {/* T&C checkbox */}
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 14, textAlign: "left" }}>
+          <input
+            type="checkbox"
+            id="terms"
+            checked={termsAccepted}
+            onChange={function(e) { setTermsAccepted(e.target.checked); setError(""); }}
+            style={{ marginTop: 3, width: 16, height: 16, flexShrink: 0, accentColor: "#C9A84C", cursor: "pointer" }}
+          />
+          <label htmlFor="terms" style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", lineHeight: 1.6, cursor: "pointer" }}>
+            I have read and agree to the{" "}
+            <a href="/terms" target="_blank" rel="noreferrer"
+              style={{ color: "#C9A84C", fontWeight: 800, textDecoration: "underline" }}>
+              Terms & Conditions
+            </a>
+            {" "}of Trimora POS. I understand the subscription plans, data ownership policy, and the 7-day grace period for late payments.
+          </label>
+        </div>
+
+        <GoldBtn onClick={handleSignup} disabled={loading || !termsAccepted} style={{ width: "100%", marginTop: 4, opacity: !termsAccepted ? 0.5 : 1 }}>
           {loading ? "Setting up your salon..." : "Create my salon →"}
         </GoldBtn>
 
         <div style={{ fontSize: 10, color: "rgba(255,255,255,0.2)", marginTop: 16 }}>
-          By signing up you agree to Trimora's terms of service.
+          © 2026 Trimora Systems · Nairobi, Kenya
         </div>
       </div>
     </div>
