@@ -39,7 +39,7 @@ export default function OnboardingPage() {
   var [adminPin,  setAdminPin]  = useState("");
 
   // ── UI state ─────────────────────────────────────────────────────
-  var [error,        setError]        = useState("");
+  var [showPass,  setShowPass]  = useState(false);
   var [loading,      setLoading]      = useState(false);
   var [needsConfirm, setNeedsConfirm] = useState(false);
 
@@ -261,9 +261,17 @@ export default function OnboardingPage() {
           onChange={function(e) { setEmail(e.target.value); setError(""); }}
           disabled={loading} style={inputStyle} />
 
-        <input type="password" placeholder="Choose a password (min 6 chars)" value={password}
-          onChange={function(e) { setPassword(e.target.value); setError(""); }}
-          disabled={loading} style={inputStyle} />
+        <div style={{ position: "relative", marginBottom: 10 }}>
+          <input type={showPass ? "text" : "password"} placeholder="Choose a password (min 6 chars)" value={password}
+            onChange={function(e) { setPassword(e.target.value); setError(""); }}
+            disabled={loading}
+            style={{ width: "100%", borderRadius: 10, border: "1.5px solid " + GOLD_DIM, background: "rgba(255,255,255,0.06)", padding: "12px 44px 12px 14px", fontSize: 14, boxSizing: "border-box", fontFamily: "inherit", outline: "none", color: WHITE }}
+          />
+          <button onClick={function() { setShowPass(!showPass); }} type="button"
+            style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "rgba(255,255,255,0.4)", padding: 0, lineHeight: 1 }}>
+            {showPass ? "🙈" : "👁"}
+          </button>
+        </div>
 
         <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
           <input
