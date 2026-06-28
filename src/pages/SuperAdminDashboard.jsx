@@ -55,6 +55,7 @@ export default function SuperAdminDashboard({ onLogout }) {
   var [suspendReason,setSuspendReason]= useState("");
   var [paymentHistory, setPaymentHistory] = useState([]);
   var [historyLoading, setHistoryLoading] = useState(false);
+  var [paymentModal, setPaymentModal] = useState(null);
   var [payPlan,      setPayPlan]      = useState("monthly");
   var [payAmount,    setPayAmount]    = useState("");
   var [payNotes,     setPayNotes]     = useState("");
