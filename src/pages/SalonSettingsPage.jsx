@@ -736,7 +736,7 @@ export default function SalonSettingsPage({ salon, onSettingsUpdated }) {
                 <div style={{ fontSize: 11, color: "#888", lineHeight: 1.6, marginBottom: 10 }}>
                   After payment, send your M-Pesa confirmation SMS screenshot to <b>admin@trimorasystems.com</b> or WhatsApp us. We'll activate your subscription within 2 hours.
                 </div>
-                <a href="mailto:admin@trimorasystems.com?subject=Subscription Payment — " + (salon && salon.name) + "&body=Hi Trimora Team,%0D%0A%0D%0AI have made a payment for the " + selectedPlan.replace("_", " ") + " plan.%0D%0A%0D%0ASalon: " + (salon && salon.name) + "%0D%0APlan: " + selectedPlan.replace("_", " ") + "%0D%0A%0D%0APlease find my M-Pesa confirmation attached.%0D%0A%0D%0AThank you."
+                <a href={"mailto:admin@trimorasystems.com?subject=Subscription Payment — " + (salon && salon.name) + "&body=Hi Trimora Team,%0D%0A%0D%0AI have made a payment for the " + selectedPlan.replace("_", " ") + " plan.%0D%0A%0D%0ASalon: " + (salon && salon.name) + "%0D%0APlan: " + selectedPlan.replace("_", " ") + "%0D%0A%0D%0APlease find my M-Pesa confirmation attached.%0D%0A%0D%0AThank you."}
                   style={{ display: "block", background: GOLD_DIM, color: WHITE, borderRadius: 10, padding: "11px 0", fontWeight: 900, fontSize: 13, textAlign: "center", textDecoration: "none" }}>
                   📧 Notify Trimora of Payment
                 </a>
