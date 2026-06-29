@@ -14,17 +14,21 @@
 //     browser or incognito tab (no localStorage dependency).
 
 import { useState, useEffect } from "react";
+import { useParams } from "react-router-dom";
 import { SUPABASE_URL, SUPABASE_KEY, GOLD, GOLD_DIM, BLACK, WHITE, RED, GREEN } from "../lib/constants.js";
 
 export default function ResetPasswordPage() {
-  // Detect mode from query params (set by ForgotPinPage in redirectTo)
+  // Slug can come from:
+  //  1. URL path param (/:slug/reset-password) — works cross-browser/incognito
+  //  2. localStorage fallback — same browser session only
+  var routeParams = useParams();
+  function validSlug(s) { return !!(s && /^[a-z0-9][a-z0-9-]{2,}$/.test(s)); }
+  var pathSlug  = validSlug(routeParams.slug) ? routeParams.slug : "";
+  var localSlug = validSlug(window.localStorage.getItem("trimora_password_reset_slug")) ? window.localStorage.getItem("trimora_password_reset_slug") : "";
+  var slug      = pathSlug || localSlug || "";
+
   var queryParams = new URLSearchParams(window.location.search);
   var isPinReset  = queryParams.get("mode") === "pin";
-  // Validate slug — must look like a real slug (letters, numbers, hyphens, min 3 chars)
-  // Guards against corrupted/truncated localStorage values like "p"
-  function validSlug(s) { return s && /^[a-z0-9][a-z0-9-]{2,}$/.test(s); }
-  var rawSlug = queryParams.get("slug") || window.localStorage.getItem("trimora_password_reset_slug") || "";
-  var slug    = validSlug(rawSlug) ? rawSlug : "";
 
   var [token,      setToken]      = useState("");
   var [loading,    setLoading]    = useState(false);

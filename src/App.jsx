@@ -139,7 +139,8 @@ export default function App() {
         <Route path="/onboard"                element={<OnboardingPage />} />
         <Route path="/terms"                  element={<TermsPage />} />
         <Route path="/superadmin"             element={<SuperAdminGate />} />
-        <Route path="/reset-password"         element={<ResetPasswordPage />} />
+        <Route path="/reset-password"           element={<ResetPasswordPage />} />
+        <Route path="/reset-password/:slug"     element={<ResetPasswordPage />} />
         <Route path="/reset-pin"              element={<ResetPinPage />} />
         <Route path="/:slug/forgot-password"  element={<ForgotPasswordPage />} />
         <Route path="/forgot-password"        element={<ForgotPasswordPage />} />
