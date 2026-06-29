@@ -8,6 +8,7 @@
 //       → extract token → show PIN form → call update_salon_pin RPC
 
 import { useState, useEffect } from "react";
+import { useParams } from "react-router-dom";
 import { SUPABASE_URL, SUPABASE_KEY, GOLD, GOLD_DIM, BLACK, WHITE, RED, GREEN } from "../lib/constants.js";
 
 export default function ResetPinPage() {
@@ -19,9 +20,14 @@ export default function ResetPinPage() {
   var [error,      setError]      = useState("");
   var [done,       setDone]       = useState(false);
 
-  // Slug stored by ForgotPinPage so success screen can link back correctly
-  var slug = window.localStorage.getItem("trimora_pin_reset_slug") || "";
-  var backHref = slug && slug !== "__noslug__" ? "/" + slug + "/pos" : "/pos";
+  // Slug from route path (/reset-pin/:slug) — works cross-browser/incognito.
+  // Falls back to localStorage for same-browser sessions.
+  var routeParams = useParams();
+  function validSlug(s) { return !!(s && /^[a-z0-9][a-z0-9-]{2,}$/.test(s)); }
+  var slug = (validSlug(routeParams.slug) ? routeParams.slug : null)
+          || (validSlug(window.localStorage.getItem("trimora_pin_reset_slug")) ? window.localStorage.getItem("trimora_pin_reset_slug") : null)
+          || "";
+  var backHref = slug ? "/" + slug + "/pos" : "/pos";
 
   useEffect(function() {
     var hash         = window.location.hash || "";

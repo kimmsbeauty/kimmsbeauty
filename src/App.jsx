@@ -142,6 +142,7 @@ export default function App() {
         <Route path="/reset-password"           element={<ResetPasswordPage />} />
         <Route path="/reset-password/:slug"     element={<ResetPasswordPage />} />
         <Route path="/reset-pin"              element={<ResetPinPage />} />
+        <Route path="/reset-pin/:slug"        element={<ResetPinPage />} />
         <Route path="/:slug/forgot-password"  element={<ForgotPasswordPage />} />
         <Route path="/forgot-password"        element={<ForgotPasswordPage />} />
         <Route path="/:slug/forgot-pin"       element={<ForgotPinPage />} />

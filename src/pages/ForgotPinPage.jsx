@@ -27,7 +27,8 @@ export default function ForgotPinPage() {
 
     // Use /reset-pin as redirectTo — a dedicated path that always shows the PIN form.
     // Supabase strips query params from redirectTo, so we use the path itself as the signal.
-    var redirectTo = window.location.origin + "/reset-pin";
+    // Embed slug in path so it survives incognito/cross-browser opens.
+    var redirectTo = window.location.origin + (slug ? "/reset-pin/" + slug : "/reset-pin");
 
     var res = await fetch(SUPABASE_URL + "/auth/v1/recover", {
       method: "POST",
