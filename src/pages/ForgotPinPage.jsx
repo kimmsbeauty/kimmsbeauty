@@ -1,19 +1,13 @@
 // src/pages/ForgotPinPage.jsx
 //
-// Allows a salon owner to reset their admin PIN when locked out.
-// Flow:
-//  1. Owner enters their email
-//  2. Send a recovery email with redirectTo = /reset-password?mode=pin&slug={slug}
-//  3. Owner clicks link → Supabase redirects to /reset-password with token in hash
-//  4. ResetPasswordPage detects mode=pin in query params → shows PIN reset form
-//  5. Enters new admin PIN → saved via update_salon_pin RPC
-//
-// The slug is embedded in the redirectTo URL so it survives across browsers/tabs
-// without depending on localStorage being present in the destination tab.
+// Step 1 of admin PIN reset: collect email and send recovery link.
+// Uses redirectTo = /reset-pin (a dedicated path) so Supabase doesn't
+// strip the intent indicator the way it does with query params.
+// Stores slug in localStorage so ResetPinPage success screen can link back.
 
 import { useState } from "react";
 import { useParams } from "react-router-dom";
-import { SUPABASE_URL, SUPABASE_KEY, GOLD, GOLD_DIM, BLACK, WHITE, RED, GREEN } from "../lib/constants.js";
+import { SUPABASE_URL, SUPABASE_KEY, GOLD, GOLD_DIM, BLACK, WHITE, RED } from "../lib/constants.js";
 
 export default function ForgotPinPage() {
   var params = useParams();
@@ -28,9 +22,12 @@ export default function ForgotPinPage() {
     if (!email.trim()) return setError("Please enter your email address.");
     setLoading(true); setError("");
 
-    // Embed mode=pin and slug in the redirectTo URL so ResetPasswordPage
-    // knows to show the PIN reset form regardless of which tab/browser opens it.
-    var redirectTo = window.location.origin + "/reset-password?mode=pin" + (slug ? "&slug=" + slug : "");
+    // Store slug so ResetPinPage success screen can redirect back to correct salon
+    window.localStorage.setItem("trimora_pin_reset_slug", slug || "__noslug__");
+
+    // Use /reset-pin as redirectTo — a dedicated path that always shows the PIN form.
+    // Supabase strips query params from redirectTo, so we use the path itself as the signal.
+    var redirectTo = window.location.origin + "/reset-pin";
 
     var res = await fetch(SUPABASE_URL + "/auth/v1/recover", {
       method: "POST",

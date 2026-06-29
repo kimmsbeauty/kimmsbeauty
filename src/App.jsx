@@ -9,6 +9,7 @@ import RatingPage from "./pages/RatingPage";
 import DeviceLoginPage from "./pages/DeviceLoginPage";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
+import ResetPinPage from "./pages/ResetPinPage";
 import ForgotPinPage from "./pages/ForgotPinPage";
 import DebugPinTest from "./pages/DebugPinTest";
 import DebugBackfillSecrets from "./pages/DebugBackfillSecrets";
@@ -124,6 +125,7 @@ export default function App() {
         <Route path="/terms"                  element={<TermsPage />} />
         <Route path="/superadmin"             element={<SuperAdminGate />} />
         <Route path="/reset-password"         element={<ResetPasswordPage />} />
+        <Route path="/reset-pin"              element={<ResetPinPage />} />
         <Route path="/:slug/forgot-password"  element={<ForgotPasswordPage />} />
         <Route path="/forgot-password"        element={<ForgotPasswordPage />} />
         <Route path="/:slug/forgot-pin"       element={<ForgotPinPage />} />
