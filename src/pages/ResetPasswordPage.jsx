@@ -20,7 +20,11 @@ export default function ResetPasswordPage() {
   // Detect mode from query params (set by ForgotPinPage in redirectTo)
   var queryParams = new URLSearchParams(window.location.search);
   var isPinReset  = queryParams.get("mode") === "pin";
-  var slug        = queryParams.get("slug") || window.localStorage.getItem("trimora_password_reset_slug") || "";
+  // Validate slug — must look like a real slug (letters, numbers, hyphens, min 3 chars)
+  // Guards against corrupted/truncated localStorage values like "p"
+  function validSlug(s) { return s && /^[a-z0-9][a-z0-9-]{2,}$/.test(s); }
+  var rawSlug = queryParams.get("slug") || window.localStorage.getItem("trimora_password_reset_slug") || "";
+  var slug    = validSlug(rawSlug) ? rawSlug : "";
 
   var [token,      setToken]      = useState("");
   var [loading,    setLoading]    = useState(false);
@@ -122,7 +126,7 @@ export default function ResetPasswordPage() {
       setDone(true);
       window.localStorage.removeItem("trimora_password_reset_slug");
       setTimeout(function() {
-        window.location.href = slug ? "/" + slug + "/pos" : "/pos";
+        window.location.href = (slug && validSlug(slug)) ? "/" + slug + "/pos" : "/pos";
       }, 3000);
     } else {
       var data = await res.json().catch(function() { return {}; });
