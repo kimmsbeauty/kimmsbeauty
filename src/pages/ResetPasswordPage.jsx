@@ -223,9 +223,14 @@ export default function ResetPasswordPage() {
 
         <div style={{ fontSize: 36, marginBottom: 12 }}>🔐</div>
         <div style={{ fontSize: 17, fontWeight: 900, color: GOLD, marginBottom: 6 }}>Set New Password</div>
-        <div style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", marginBottom: 24 }}>
+        <div style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", marginBottom: token ? 12 : 24 }}>
           Choose a strong password for your account.
         </div>
+        {token && (
+          <div style={{ fontSize: 11, color: "rgba(201,168,76,0.5)", marginBottom: 16, padding: "8px 10px", background: "rgba(201,168,76,0.06)", borderRadius: 8, border: "1px solid rgba(201,168,76,0.15)", lineHeight: 1.6 }}>
+            Trying to reset your admin PIN? <a href="/reset-pin" style={{ color: GOLD, fontWeight: 700, textDecoration: "none" }}>Click here instead →</a>
+          </div>
+        )}
 
         <div style={{ position: "relative", marginBottom: 10 }}>
           <input
