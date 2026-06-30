@@ -1188,58 +1188,48 @@ export default function SuperAdminDashboard({ onLogout }) {
     <div style={{ minHeight: "100vh", background: CREAM, padding: "0 0 80px" }}>
 
       {/* Header */}
-      <div style={{ background: BLACK, padding: "16px 20px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 2 }}>
+      <div style={{ background: BLACK, padding: "14px 20px 10px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
           <div>
             <div style={{ fontSize: 16, fontWeight: 900, color: GOLD, letterSpacing: "0.1em" }}>TRIMORA</div>
             <div style={{ fontSize: 10, color: GOLD_DIM, letterSpacing: "0.15em" }}>SUPER ADMIN</div>
           </div>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <button
-              onClick={function() { setView("plans"); loadPlans(); }}
-              style={{ background: "rgba(255,255,255,0.1)", border: "1px solid " + GOLD_DIM + "44", color: WHITE, borderRadius: 8, padding: "7px 12px", fontSize: 12, cursor: "pointer", fontWeight: 800 }}
-            >
-              💲 Plans
-            </button>
-            <button
-              onClick={function() { setView("audit"); loadAuditLog(); }}
-              style={{ background: "rgba(255,255,255,0.1)", border: "1px solid " + GOLD_DIM + "44", color: WHITE, borderRadius: 8, padding: "7px 12px", fontSize: 12, cursor: "pointer", fontWeight: 800 }}
-            >
-              📋 Audit Log
-            </button>
-            <button
-              onClick={function() { setView("health"); }}
-              style={{ background: "rgba(255,255,255,0.1)", border: "1px solid " + GOLD_DIM + "44", color: WHITE, borderRadius: 8, padding: "7px 12px", fontSize: 12, cursor: "pointer", fontWeight: 800 }}
-            >
-              🩺 Health
-            </button>
-            <button
-              onClick={function() { setView("analytics"); loadAnalytics(); }}
-              style={{ background: "rgba(255,255,255,0.1)", border: "1px solid " + GOLD_DIM + "44", color: WHITE, borderRadius: 8, padding: "7px 12px", fontSize: 12, cursor: "pointer", fontWeight: 800 }}
-            >
-              📊 Analytics
-            </button>
-            <button
-              onClick={function() { setManualModal(true); setManualDone(""); }}
-              style={{ background: "rgba(255,255,255,0.1)", border: "1px solid " + GOLD_DIM + "44", color: WHITE, borderRadius: 8, padding: "7px 12px", fontSize: 12, cursor: "pointer", fontWeight: 800 }}
-            >
-              + Manual
-            </button>
-            <button
-              onClick={function() { setInviteModal(true); setInviteLink(""); setInviteEmail(""); setInviteName(""); }}
-              style={{ background: GOLD_DIM, border: "none", color: BLACK, borderRadius: 8, padding: "7px 12px", fontSize: 12, cursor: "pointer", fontWeight: 800 }}
-            >
-              + Invite
-            </button>
-            <button
-              onClick={handleLogout}
-              style={{ background: "rgba(255,255,255,0.08)", border: "1px solid " + GOLD_DIM + "44", color: GOLD_DIM, borderRadius: 8, padding: "6px 12px", fontSize: 12, cursor: "pointer", fontWeight: 700 }}
-            >
-              Sign Out
-            </button>
-          </div>
+          {session && <div style={{ fontSize: 10, color: GOLD_DIM + "88" }}>{session.email}</div>}
         </div>
-        {session && <div style={{ fontSize: 10, color: GOLD_DIM + "88", marginTop: 4 }}>{session.email}</div>}
+
+        {/* Horizontally scrollable button row — no wrapping on mobile */}
+        <div style={{ display: "flex", gap: 8, overflowX: "auto", WebkitOverflowScrolling: "touch", scrollbarWidth: "none", msOverflowStyle: "none", paddingBottom: 2 }}>
+          {[
+            { label: "💲 Plans",      onClick: function() { setView("plans"); loadPlans(); } },
+            { label: "📋 Audit Log",  onClick: function() { setView("audit"); loadAuditLog(); } },
+            { label: "🩺 Health",     onClick: function() { setView("health"); } },
+            { label: "📊 Analytics",  onClick: function() { setView("analytics"); loadAnalytics(); } },
+            { label: "+ Manual",      onClick: function() { setManualModal(true); setManualDone(""); } },
+            { label: "+ Invite",      onClick: function() { setInviteModal(true); setInviteLink(""); setInviteEmail(""); setInviteName(""); }, highlight: true },
+            { label: "Sign Out",      onClick: handleLogout, muted: true },
+          ].map(function(btn) {
+            return (
+              <button
+                key={btn.label}
+                onClick={btn.onClick}
+                style={{
+                  flexShrink: 0,
+                  background: btn.highlight ? GOLD_DIM : btn.muted ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.1)",
+                  border: btn.highlight ? "none" : "1px solid " + GOLD_DIM + "44",
+                  color: btn.highlight ? BLACK : btn.muted ? GOLD_DIM : WHITE,
+                  borderRadius: 20,
+                  padding: "7px 14px",
+                  fontSize: 12,
+                  cursor: "pointer",
+                  fontWeight: btn.muted ? 700 : 800,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {btn.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* Session expired banner — shows inline rather than letting
