@@ -127,6 +127,7 @@ async function refreshAccessToken(auth) {
       refresh_token: data.refresh_token || auth.refresh_token,
       expires_at: Date.now() + (data.expires_in || 3600) * 1000,
       login_at: auth.login_at,
+      salon_id: auth.salon_id || null, // preserve — needed for DeviceGate isolation check
     };
     writeAuth(updated);
     return updated;
