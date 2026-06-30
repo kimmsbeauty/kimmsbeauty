@@ -40,9 +40,25 @@ if (typeof window !== "undefined") {
 
 async function dbDirect(method, table, data = null, filters = "") {
   // Resolved by SalonGate for slug-prefixed routes; falls back to
-  // Kimms' fixed ID on the legacy unprefixed routes, where nothing
-  // ever resolves a slug at all.
-  const activeSalonId = getCurrentSalonId() || KIMMS_SALON_ID;
+  // Kimms' fixed ID ONLY on the legacy unprefixed routes (/pos, /booking),
+  // where no SalonGate exists and no slug is ever resolved — this is the
+  // one deliberate exception, confirmed safe because SalonGate fully
+  // blocks rendering of its children until currentSalonId is set, so a
+  // slugged route can never reach this fallback for tenant-scoped tables.
+  //
+  // If this fallback is ever hit for a tenant-scoped table while a slug
+  // IS present in the URL, that indicates a real bug upstream (SalonGate
+  // rendered children before resolving) — log loudly rather than silently
+  // serving Kimms' data to the wrong salon.
+  const resolvedId = getCurrentSalonId();
+  if (!resolvedId && TENANT_TABLES.has(table) && window.location.pathname.split("/").length > 2) {
+    console.error(
+      "[db.js] SECURITY: tenant-scoped query for '" + table + "' had no resolved salon id " +
+      "on a slugged route (" + window.location.pathname + "). Falling back to KIMMS_SALON_ID " +
+      "to avoid a hard crash, but this should never happen — investigate SalonGate timing."
+    );
+  }
+  const activeSalonId = resolvedId || KIMMS_SALON_ID;
 
   let body = data;
   if (data && (method === "POST" || method === "PATCH") && TENANT_TABLES.has(table)) {
