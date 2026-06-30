@@ -195,6 +195,33 @@ export default function SalonSettingsPage({ salon, onSettingsUpdated }) {
   var [prefError,  setPrefError]  = useState("");
   var [selectedPlan, setSelectedPlan] = useState("");
 
+  // Subscription plan prices — fetched from DB so Super Admin can
+  // update them without a code change.
+  var [planPrices, setPlanPrices] = useState(null); // null = still loading
+
+  function fetchPlanPrices() {
+    fetch(SUPABASE_URL + "/rest/v1/subscription_plans?order=sort_order.asc", {
+      headers: { apikey: SUPABASE_KEY },
+    })
+      .then(function(r) { return r.json(); })
+      .then(function(rows) {
+        if (!Array.isArray(rows)) return;
+        var map = {};
+        rows.forEach(function(r) { map[r.key] = r; });
+        setPlanPrices(map);
+      })
+      .catch(function() {});
+  }
+
+  // Fetch on mount, and re-fetch whenever the window regains focus
+  // so price changes made in Super Admin are reflected without a full
+  // page reload.
+  useEffect(function() {
+    fetchPlanPrices();
+    window.addEventListener("focus", fetchPlanPrices);
+    return function() { window.removeEventListener("focus", fetchPlanPrices); };
+  }, []);
+
   // Reset saved state after 3 seconds
   function autoResetSaved(setter) {
     setTimeout(function() { setter(false); }, 3000);
@@ -691,33 +718,31 @@ export default function SalonSettingsPage({ salon, onSettingsUpdated }) {
             <div style={{ fontSize: 11, fontWeight: 800, color: "#92400E", textTransform: "uppercase", marginBottom: 8 }}>
               {salon.subscription_plan ? "Renew or Upgrade" : "Choose a Plan"}
             </div>
-            {[
-              { key: "monthly",     label: "Monthly",     price: 1200,  period: "30 days",   save: "" },
-              { key: "quarterly",   label: "Quarterly",   price: 3300,  period: "90 days",   save: "Save 8%" },
-              { key: "semi_annual", label: "Semi-Annual", price: 6000,  period: "180 days",  save: "Save 17%" },
-              { key: "annual",      label: "Annual",      price: 10800, period: "365 days",  save: "Save 25%" },
-              { key: "lifetime",    label: "Lifetime",    price: 38000, period: "Forever",   save: "One-time" },
-            ].map(function(plan) {
-              return (
-                <div key={plan.key}
-                  onClick={function() { setSelectedPlan(plan.key === selectedPlan ? "" : plan.key); }}
-                  style={{
-                    background: selectedPlan === plan.key ? GOLD_DIM + "11" : WHITE,
-                    border: "1.5px solid " + (selectedPlan === plan.key ? GOLD_DIM : "#E5E7EB"),
-                    borderRadius: 10, padding: "10px 14px", marginBottom: 8,
-                    cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center",
-                  }}>
-                  <div>
-                    <div style={{ fontSize: 13, fontWeight: 800, color: DARK }}>{plan.label}</div>
-                    <div style={{ fontSize: 11, color: "#888" }}>{plan.period}</div>
+            {planPrices === null ? (
+              <div style={{ fontSize: 12, color: "#999", padding: "10px 0" }}>Loading plans...</div>
+            ) : (
+              Object.values(planPrices).map(function(plan) {
+                return (
+                  <div key={plan.key}
+                    onClick={function() { setSelectedPlan(plan.key === selectedPlan ? "" : plan.key); }}
+                    style={{
+                      background: selectedPlan === plan.key ? GOLD_DIM + "11" : WHITE,
+                      border: "1.5px solid " + (selectedPlan === plan.key ? GOLD_DIM : "#E5E7EB"),
+                      borderRadius: 10, padding: "10px 14px", marginBottom: 8,
+                      cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center",
+                    }}>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 800, color: DARK }}>{plan.label}</div>
+                      <div style={{ fontSize: 11, color: "#888" }}>{plan.period_days ? plan.period_days + " days" : "Forever"}</div>
+                    </div>
+                    <div style={{ textAlign: "right" }}>
+                      <div style={{ fontSize: 14, fontWeight: 900, color: GOLD_DIM }}>KES {plan.price_kes.toLocaleString()}</div>
+                      {plan.save_label && <div style={{ fontSize: 10, color: GREEN, fontWeight: 700 }}>{plan.save_label}</div>}
+                    </div>
                   </div>
-                  <div style={{ textAlign: "right" }}>
-                    <div style={{ fontSize: 14, fontWeight: 900, color: GOLD_DIM }}>KES {plan.price.toLocaleString()}</div>
-                    {plan.save && <div style={{ fontSize: 10, color: GREEN, fontWeight: 700 }}>{plan.save}</div>}
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })
+            )}
 
             {selectedPlan && (
               <div style={{ background: "#F0FDF4", border: "1.5px solid #86EFAC", borderRadius: 12, padding: "14px", marginTop: 6 }}>
@@ -731,7 +756,7 @@ export default function SalonSettingsPage({ salon, onSettingsUpdated }) {
                   Till Number: <b style={{ fontSize: 14 }}>— Contact admin —</b>
                 </div>
                 <div style={{ fontSize: 12, color: "#166534", marginBottom: 10 }}>
-                  Amount: <b>KES {[{ key: "monthly", price: 1200 }, { key: "quarterly", price: 3300 }, { key: "semi_annual", price: 6000 }, { key: "annual", price: 10800 }, { key: "lifetime", price: 38000 }].find(function(p) { return p.key === selectedPlan; })?.price.toLocaleString()}</b>
+                  Amount: <b>KES {planPrices && planPrices[selectedPlan] ? planPrices[selectedPlan].price_kes.toLocaleString() : "—"}</b>
                 </div>
                 <div style={{ fontSize: 11, color: "#888", lineHeight: 1.6, marginBottom: 10 }}>
                   After payment, send your M-Pesa confirmation SMS screenshot to <b>admin@trimorasystems.com</b> or WhatsApp us. We'll activate your subscription within 2 hours.
