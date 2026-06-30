@@ -68,6 +68,13 @@ export default function SuperAdminDashboard({ onLogout }) {
   var [auditLog, setAuditLog] = useState([]);
   var [auditLoading, setAuditLoading] = useState(false);
   var [auditLoaded, setAuditLoaded] = useState(false);
+  var [plans, setPlans] = useState([]);
+  var [plansLoaded, setPlansLoaded] = useState(false);
+  var [plansLoading, setPlansLoading] = useState(false);
+  var [planEditing, setPlanEditing] = useState(null);   // key of plan being edited
+  var [planEditValue, setPlanEditValue] = useState(""); // new price input
+  var [planSaving, setPlanSaving] = useState(false);
+  var [planError, setPlanError] = useState("");
   var [paymentHistory, setPaymentHistory] = useState([]);
   var [historyLoading, setHistoryLoading] = useState(false);
   var [paymentModal, setPaymentModal] = useState(null);
@@ -97,7 +104,7 @@ export default function SuperAdminDashboard({ onLogout }) {
   // letting cryptic JWT errors surface from individual action calls.
   var sessionExpired = !session;
 
-  useEffect(function() { loadData(); }, []);
+  useEffect(function() { loadData(); loadPlans(); }, []);
 
   async function loadData() {
     setLoading(true);
@@ -159,6 +166,75 @@ export default function SuperAdminDashboard({ onLogout }) {
     }
     setAuditLoaded(true);
     setAuditLoading(false);
+  }
+
+  // Loaded once on first open — plans rarely change.
+  async function loadPlans() {
+    if (plansLoaded) return;
+    setPlansLoading(true);
+    var rows = await saFetch("GET", "subscription_plans", "?order=sort_order.asc");
+    if (rows) setPlans(rows);
+    setPlansLoaded(true);
+    setPlansLoading(false);
+  }
+
+  async function updatePlanPrice(key, newPrice) {
+    setPlanError("");
+    var price = parseInt(newPrice, 10);
+    if (isNaN(price) || price < 0) { setPlanError("Enter a valid price (0 or more)."); return; }
+    setPlanSaving(true);
+    var token = (await import("../lib/superAdminAuth")).getSuperAdminToken();
+    if (!token) { setPlanSaving(false); setPlanError("Session expired. Please sign out and sign in again."); return; }
+    var res = await fetch(SUPABASE_URL + "/rest/v1/rpc/super_admin_update_plan_price", {
+      method: "POST",
+      headers: { apikey: SUPABASE_KEY, Authorization: "Bearer " + token, "Content-Type": "application/json" },
+      body: JSON.stringify({ p_key: key, p_price_kes: price }),
+    });
+    setPlanSaving(false);
+    if (res.ok) {
+      logAction("update_plan_price", null, null, key + " → KES " + price.toLocaleString());
+      setPlanEditing(null);
+      setPlanEditValue("");
+      // Refresh plans list from DB so both this view and any
+      // SalonSettingsPage load that happens next gets the new price.
+      setPlansLoaded(false);
+      var rows = await saFetch("GET", "subscription_plans", "?order=sort_order.asc");
+      if (rows) setPlans(rows);
+      setPlansLoaded(true);
+    } else {
+      var err = await res.json().catch(function() { return {}; });
+      setPlanError(err.message || "Failed to update price.");
+    }
+  }
+
+  // Loaded on dashboard init and after any price change.
+  async function loadPlans() {
+    var rows = await saFetch("GET", "subscription_plans", "?order=sort_order.asc&is_active=eq.true");
+    if (rows) setPlans(rows);
+    setPlansLoaded(true);
+  }
+
+  async function savePlanPrice(key, newPrice) {
+    setPlanError("");
+    var price = parseInt(newPrice, 10);
+    if (isNaN(price) || price < 0) { setPlanError("Enter a valid price (0 or more)."); return; }
+    setPlanSaving(true);
+    var token = (await import("../lib/superAdminAuth")).getSuperAdminToken();
+    if (!token) { setPlanSaving(false); setPlanError("Session expired. Please sign out and sign in again."); return; }
+    var res = await fetch(SUPABASE_URL + "/rest/v1/rpc/super_admin_update_plan_price", {
+      method: "POST",
+      headers: { apikey: SUPABASE_KEY, Authorization: "Bearer " + token, "Content-Type": "application/json" },
+      body: JSON.stringify({ p_key: key, p_price_kes: price }),
+    });
+    setPlanSaving(false);
+    if (res.ok) {
+      logAction("update_plan_price", null, null, key + " → KSh " + price.toLocaleString());
+      setPlanEditing(null);
+      await loadPlans();
+    } else {
+      var err = await res.json().catch(function() { return {}; });
+      setPlanError(err.message || "Failed to save price.");
+    }
   }
 
   // Loaded once, lazily, only when Analytics is opened — avoids
@@ -256,13 +332,20 @@ export default function SuperAdminDashboard({ onLogout }) {
       });
   }
 
-  var PLANS = {
-    monthly:     { label: "Monthly",      price: 1200,  days: 30  },
-    quarterly:   { label: "Quarterly",    price: 3300,  days: 90  },
-    semi_annual: { label: "Semi-Annual",  price: 6000,  days: 180 },
-    annual:      { label: "Annual",       price: 10800, days: 365 },
-    lifetime:    { label: "Lifetime",     price: 38000, days: null },
+  // PLANS is built from the database-fetched plans array (loaded lazily
+  // when Plans view is opened, but also needed for the payment modal).
+  // Falls back to hardcoded values if plans haven't been fetched yet
+  // so the payment modal always works even on first open.
+  var PLANS_FALLBACK = {
+    monthly:     { label: "Monthly",      price_kes: 1200,  days: 30  },
+    quarterly:   { label: "Quarterly",    price_kes: 3300,  days: 90  },
+    semi_annual: { label: "Semi-Annual",  price_kes: 6000,  days: 180 },
+    annual:      { label: "Annual",       price_kes: 10800, days: 365 },
+    lifetime:    { label: "Lifetime",     price_kes: 38000, days: null },
   };
+  var PLANS = plans.length > 0
+    ? plans.reduce(function(acc, p) { acc[p.key] = p; return acc; }, {})
+    : PLANS_FALLBACK;
 
   async function recordPayment(salon, plan, amount, notes) {
     setPaymentSaving(true);
@@ -609,6 +692,100 @@ export default function SuperAdminDashboard({ onLogout }) {
   });
 
   // ── DETAIL VIEW ──────────────────────────────────────────────────
+  // ── PLANS VIEW ───────────────────────────────────────────────────
+  if (view === "plans") {
+    return (
+      <div style={{ minHeight: "100vh", background: CREAM, padding: "0 0 80px" }}>
+        <div style={{ background: BLACK, padding: "16px 20px" }}>
+          <button onClick={function() { setView("salons"); }}
+            style={{ background: "none", border: "none", color: GOLD_DIM, fontSize: 13, fontWeight: 700, cursor: "pointer", marginBottom: 8, padding: 0 }}>
+            ← Back
+          </button>
+          <div style={{ fontSize: 16, fontWeight: 900, color: GOLD }}>💲 Subscription Plans</div>
+          <div style={{ fontSize: 11, color: GOLD_DIM + "aa", marginTop: 2 }}>Changes apply immediately — salons see the new price next time they load Settings</div>
+        </div>
+
+        <div style={{ padding: 16 }}>
+          {plansLoading ? (
+            <div style={{ textAlign: "center", padding: 40, color: "#888" }}>Loading...</div>
+          ) : plans.length === 0 ? (
+            <div style={{ textAlign: "center", padding: 40, color: "#888" }}>No plans found.</div>
+          ) : (
+            plans.map(function(plan) {
+              var isEditing = planEditing === plan.key;
+              return (
+                <div key={plan.key} style={{ background: WHITE, borderRadius: 14, padding: 16, marginBottom: 10, border: "1.5px solid " + GOLD_DIM + "33" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: isEditing ? 12 : 0 }}>
+                    <div>
+                      <div style={{ fontSize: 14, fontWeight: 800, color: DARK }}>{plan.label}</div>
+                      <div style={{ fontSize: 11, color: "#999", marginTop: 2 }}>
+                        {plan.period_days ? plan.period_days + " days" : "Forever"}
+                        {plan.save_label ? " · " + plan.save_label : ""}
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      {!isEditing && (
+                        <>
+                          <div style={{ fontSize: 16, fontWeight: 900, color: GOLD }}>KES {plan.price_kes.toLocaleString()}</div>
+                          <button
+                            onClick={function() { setPlanEditing(plan.key); setPlanEditValue(String(plan.price_kes)); setPlanError(""); }}
+                            style={{ background: WHITE, border: "1.5px solid " + GOLD_DIM, borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 800, cursor: "pointer", color: DARK }}
+                          >
+                            Edit
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  {isEditing && (
+                    <div>
+                      <label style={{ fontSize: 11, fontWeight: 800, color: "#888", display: "block", marginBottom: 6, textTransform: "uppercase" }}>New Price (KES)</label>
+                      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                        <input
+                          type="number" min="0"
+                          value={planEditValue}
+                          onChange={function(e) { setPlanEditValue(e.target.value); setPlanError(""); }}
+                          onKeyDown={function(e) { if (e.key === "Enter") updatePlanPrice(plan.key, planEditValue); if (e.key === "Escape") { setPlanEditing(null); setPlanError(""); } }}
+                          autoFocus
+                          style={{ flex: 1, borderRadius: 10, border: "1.5px solid " + GOLD_DIM, background: CREAM, padding: "11px 13px", fontSize: 16, fontWeight: 800, boxSizing: "border-box", fontFamily: "inherit", outline: "none", color: DARK }}
+                        />
+                        <button
+                          onClick={function() { updatePlanPrice(plan.key, planEditValue); }}
+                          disabled={planSaving}
+                          style={{ background: GOLD, color: BLACK, border: "none", borderRadius: 10, padding: "11px 16px", fontWeight: 900, fontSize: 13, cursor: "pointer", opacity: planSaving ? 0.6 : 1, whiteSpace: "nowrap" }}
+                        >
+                          {planSaving ? "Saving..." : "Save"}
+                        </button>
+                        <button
+                          onClick={function() { setPlanEditing(null); setPlanError(""); }}
+                          disabled={planSaving}
+                          style={{ background: WHITE, color: "#888", border: "1.5px solid #ddd", borderRadius: 10, padding: "11px 14px", fontWeight: 700, fontSize: 13, cursor: "pointer" }}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                      {planError && (
+                        <div style={{ color: "#991B1B", fontSize: 12, marginTop: 8, padding: "6px 10px", background: "#FEE2E2", borderRadius: 8 }}>{planError}</div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
+
+          <div style={{ marginTop: 20, padding: "14px 16px", background: "#FEF3C7", borderRadius: 12, border: "1.5px solid #F59E0B33" }}>
+            <div style={{ fontSize: 12, fontWeight: 800, color: "#92400E", marginBottom: 4 }}>⚠️ Important</div>
+            <div style={{ fontSize: 12, color: "#92400E", lineHeight: 1.7 }}>
+              Changing a price here does not retroactively affect existing subscriptions — only what salons see when choosing or renewing a plan. The "save" labels (e.g. "Save 8%") are not auto-calculated and should be updated manually if prices change significantly.
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // ── AUDIT LOG VIEW ───────────────────────────────────────────────
   if (view === "audit") {
     var actionLabels = {
@@ -619,6 +796,7 @@ export default function SuperAdminDashboard({ onLogout }) {
       edit_salon_details:   { icon: "✏️", label: "Edited salon details" },
       manual_onboard:       { icon: "🏪", label: "Manually onboarded salon" },
       generate_invite:      { icon: "📨", label: "Generated invite link" },
+      update_plan_price:    { icon: "💲", label: "Updated plan price" },
     };
 
     return (
@@ -1005,6 +1183,12 @@ export default function SuperAdminDashboard({ onLogout }) {
             <div style={{ fontSize: 10, color: GOLD_DIM, letterSpacing: "0.15em" }}>SUPER ADMIN</div>
           </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button
+              onClick={function() { setView("plans"); loadPlans(); }}
+              style={{ background: "rgba(255,255,255,0.1)", border: "1px solid " + GOLD_DIM + "44", color: WHITE, borderRadius: 8, padding: "7px 12px", fontSize: 12, cursor: "pointer", fontWeight: 800 }}
+            >
+              💲 Plans
+            </button>
             <button
               onClick={function() { setView("audit"); loadAuditLog(); }}
               style={{ background: "rgba(255,255,255,0.1)", border: "1px solid " + GOLD_DIM + "44", color: WHITE, borderRadius: 8, padding: "7px 12px", fontSize: 12, cursor: "pointer", fontWeight: 800 }}
