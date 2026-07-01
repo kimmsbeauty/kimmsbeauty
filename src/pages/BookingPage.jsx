@@ -42,7 +42,11 @@ export default function BookingPage() {
   const mpesaAccount     = (salon && salon.mpesa_account)            || null;
   const mpesaSendMoney   = (salon && salon.mpesa_send_money_phone)   || null;
   const enabledMethods   = (salon && salon.enabled_payment_methods)  || ["Cash", "Till"];
-  const contactPhone     = (salon && salon.contact_phone)            || null;
+  const contactPhoneRaw  = (salon && salon.contact_phone)            || null;
+  // Normalize to international format for WhatsApp links (wa.me requires no + and country code)
+  const contactPhone = contactPhoneRaw
+    ? contactPhoneRaw.replace(/\s/g, "").replace(/^\+/, "").replace(/^0/, "254")
+    : null;
 
   // Derive which payment methods are actually configured for this salon
   const hasTill      = enabledMethods.includes("Till")      && !!mpesaTill;
