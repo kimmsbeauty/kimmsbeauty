@@ -5,7 +5,7 @@
 // the path itself signals PIN reset mode to avoid Supabase stripping query strings).
 //
 // Flow: recovery email → /reset-pin#access_token=xxx&type=recovery
-//       → extract token → show PIN form → call update_salon_pin RPC
+//       → extract token → show PIN form → call update_salon_pin RPC (bcrypt server-side)
 
 import { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";

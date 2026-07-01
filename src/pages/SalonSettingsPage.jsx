@@ -352,23 +352,9 @@ export default function SalonSettingsPage({ salon, onSettingsUpdated }) {
     }
     setPinSaving(true);
 
-    var updates = [];
-
-    if (newStaffPin) {
-      updates.push(db("PATCH", "salon_pins", {
-        pin_hash: btoa(newStaffPin), // will be MD5'd server-side via RPC ideally;
-        // for now matches the md5() used in complete_salon_onboarding
-      }, "?role=eq.staff"));
-    }
-    if (newAdminPin) {
-      updates.push(db("PATCH", "salon_pins", {
-        pin_hash: btoa(newAdminPin),
-      }, "?role=eq.admin"));
-    }
-
-    // Use the update_salon_pins RPC if available, otherwise direct PATCH
-    // Direct PATCH approach: PIN must be stored as MD5 hash to match verify_staff_pin
-    // We call a dedicated RPC for this to keep hashing server-side
+    // All PIN hashing is done server-side via update_salon_pin RPC
+    // (bcrypt since the security migration). Never write raw or
+    // client-side hashed values directly to salon_pins.
     var token = await getValidAccessToken();
 
     var rpcUpdates = [];
