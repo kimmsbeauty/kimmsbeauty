@@ -105,10 +105,26 @@ export default function SalonSettingsPage({ salon, onSettingsUpdated }) {
   var [contactPhone, setContactPhone] = useState((salon && salon.contact_phone) || "");
   var [mpesaTill,    setMpesaTill]    = useState((salon && salon.mpesa_till) || "");
   var [mpesaName,    setMpesaName]    = useState((salon && salon.mpesa_name) || "");
+  var [mpesaPaybill, setMpesaPaybill] = useState((salon && salon.mpesa_paybill) || "");
+  var [mpesaAccount, setMpesaAccount] = useState((salon && salon.mpesa_account) || "");
+  var [mpesaSendMoneyPhone, setMpesaSendMoneyPhone] = useState((salon && salon.mpesa_send_money_phone) || "");
+  var [enabledPaymentMethods, setEnabledPaymentMethods] = useState(
+    (salon && salon.enabled_payment_methods) || ["Cash", "Till"]
+  );
   var [receiptFooter,setReceiptFooter]= useState((salon && salon.receipt_footer) || "");
   var [contactSaving,  setContactSaving]  = useState(false);
   var [contactSaved,   setContactSaved]   = useState(false);
   var [contactError,   setContactError]   = useState("");
+
+  function togglePaymentMethod(method) {
+    setEnabledPaymentMethods(function(prev) {
+      if (method === "Cash") return prev; // Cash always stays
+      return prev.includes(method)
+        ? prev.filter(function(m) { return m !== method; })
+        : prev.concat(method);
+    });
+    setContactSaved(false);
+  }
 
   // ── M-Pesa STK Push (Daraja) fields ───────────────────────────────
   // Lives in salon_mpesa_config, not salon_settings - a separate table
@@ -266,16 +282,28 @@ export default function SalonSettingsPage({ salon, onSettingsUpdated }) {
       setContactError("Till number should be 5–10 digits.");
       return;
     }
+    if (mpesaPaybill && !/^\d{5,10}$/.test(mpesaPaybill)) {
+      setContactError("Paybill number should be 5–10 digits.");
+      return;
+    }
+    if (mpesaSendMoneyPhone && !/^(0|254|\+254)\d{9}$/.test(mpesaSendMoneyPhone.replace(/\s/g, ""))) {
+      setContactError("Send Money phone should be a valid Kenyan number (e.g. 0712345678).");
+      return;
+    }
     if (contactPhone && !/^(0|254|\+254)\d{9}$/.test(contactPhone.replace(/\s/g, ""))) {
       setContactError("Enter a valid Kenyan phone number (e.g. 0712345678).");
       return;
     }
     setContactSaving(true);
     var ok = await db("PATCH", "salon_settings", {
-      contact_phone:  contactPhone || null,
-      mpesa_till:     mpesaTill || null,
-      mpesa_name:     mpesaName || null,
-      receipt_footer: receiptFooter || null,
+      contact_phone:           contactPhone || null,
+      mpesa_till:              mpesaTill || null,
+      mpesa_name:              mpesaName || null,
+      mpesa_paybill:           mpesaPaybill || null,
+      mpesa_account:           mpesaAccount || null,
+      mpesa_send_money_phone:  mpesaSendMoneyPhone || null,
+      enabled_payment_methods: enabledPaymentMethods,
+      receipt_footer:          receiptFooter || null,
     }, "?salon_id=eq." + (salon && salon.id));
     setContactSaving(false);
     if (ok === null) { setContactError("Save failed. Check your connection."); return; }
@@ -490,7 +518,7 @@ export default function SalonSettingsPage({ salon, onSettingsUpdated }) {
           <div style={{ fontSize: 10, color: "#888", marginTop: 4 }}>Used for WhatsApp links on the booking page</div>
         </Field>
 
-        <Field label="M-Pesa Till Number">
+        <Field label="M-Pesa Till Number (Buy Goods)">
           <input
             value={mpesaTill}
             onChange={function(e) { setMpesaTill(e.target.value); setContactSaved(false); }}
@@ -507,6 +535,64 @@ export default function SalonSettingsPage({ salon, onSettingsUpdated }) {
             style={inputStyle}
           />
           <div style={{ fontSize: 10, color: "#888", marginTop: 4 }}>Shown to customers on the payment screen</div>
+        </Field>
+
+        <Field label="M-Pesa Paybill Number">
+          <input
+            value={mpesaPaybill}
+            onChange={function(e) { setMpesaPaybill(e.target.value); setContactSaved(false); }}
+            placeholder="e.g. 522522"
+            style={inputStyle}
+          />
+        </Field>
+
+        <Field label="Paybill Account Number">
+          <input
+            value={mpesaAccount}
+            onChange={function(e) { setMpesaAccount(e.target.value); setContactSaved(false); }}
+            placeholder="e.g. your phone number or business name"
+            style={inputStyle}
+          />
+        </Field>
+
+        <Field label="Send Money Phone Number">
+          <input
+            value={mpesaSendMoneyPhone}
+            onChange={function(e) { setMpesaSendMoneyPhone(e.target.value); setContactSaved(false); }}
+            placeholder="0712345678"
+            style={inputStyle}
+          />
+          <div style={{ fontSize: 10, color: "#888", marginTop: 4 }}>Customer sends M-Pesa directly to this number</div>
+        </Field>
+
+        <Field label="Payment Methods at Checkout">
+          <div style={{ fontSize: 11, color: "#888", marginBottom: 10 }}>
+            Cash is always available. Enable the M-Pesa options your salon accepts.
+          </div>
+          {["Till", "Paybill", "Send Money"].map(function(method) {
+            var isOn = enabledPaymentMethods.includes(method);
+            return (
+              <div key={method} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                <div
+                  onClick={function() { togglePaymentMethod(method); }}
+                  style={{
+                    width: 36, height: 20, borderRadius: 10, cursor: "pointer",
+                    background: isOn ? "#4ADE80" : "#E5E7EB",
+                    position: "relative", transition: "background 0.2s", flexShrink: 0,
+                  }}
+                >
+                  <div style={{
+                    position: "absolute", top: 2, left: isOn ? 18 : 2,
+                    width: 16, height: 16, borderRadius: "50%", background: "#fff",
+                    transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
+                  }} />
+                </div>
+                <span style={{ fontSize: 13, fontWeight: 600, color: DARK }}>
+                  {method === "Till" ? "Buy Goods (Till)" : method === "Send Money" ? "Send Money (Person to Person)" : "Paybill"}
+                </span>
+              </div>
+            );
+          })}
         </Field>
 
         <Field label="Receipt Footer Message">

@@ -119,9 +119,15 @@ export default function Receipt({ salon, sale, onClose, onSendFeedback, canSendT
 
         <div style={{ fontSize: 12, color: "#888", marginTop: 8 }}><b>Payment:</b> {sale.payment}</div>
 
-        {sale.payment === "M-Pesa" && (
+        {(sale.payment === "M-Pesa" || sale.payment === "Till" || sale.payment === "Paybill" || sale.payment === "Send Money") && (
           <div style={{ marginTop: 14 }}>
-            <MpesaInstructions amount={sale.total} reference={sale.client} compact={true} salon={salon} />
+            <MpesaInstructions
+              amount={sale.total}
+              reference={sale.client}
+              compact={true}
+              salon={salon}
+              variant={sale.payment === "M-Pesa" ? "Till" : sale.payment}
+            />
           </div>
         )}
 

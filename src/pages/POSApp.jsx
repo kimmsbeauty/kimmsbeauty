@@ -94,7 +94,7 @@ export default function POSApp({ onLogout, userRole }) {
   var showCustomerDropState = useState(false); var showCustomerDrop = showCustomerDropState[0]; var setShowCustomerDrop = showCustomerDropState[1];
   var addingNewCustomerState = useState(false); var addingNewCustomer = addingNewCustomerState[0]; var setAddingNewCustomer = addingNewCustomerState[1];
   var selStaffState = useState(""); var selStaff = selStaffState[0]; var setSelStaff = selStaffState[1];
-  var payMethodState = useState("M-Pesa"); var payMethod = payMethodState[0]; var setPayMethod = payMethodState[1];
+  var payMethodState = useState("Cash"); var payMethod = payMethodState[0]; var setPayMethod = payMethodState[1];
   var catFilterState = useState("All"); var catFilter = catFilterState[0]; var setCatFilter = catFilterState[1];
   var typeFilterState = useState("services"); var typeFilter = typeFilterState[0]; var setTypeFilter = typeFilterState[1];
 
@@ -430,7 +430,7 @@ export default function POSApp({ onLogout, userRole }) {
   }
 
   function resetCart() {
-    setCart([]); setClientName(""); setClientPhone(""); setSelStaff(""); setPayMethod("M-Pesa");
+    setCart([]); setClientName(""); setClientPhone(""); setSelStaff(""); setPayMethod("Cash");
     setSelectedCustomer(null); setCustomerSearch(""); setAddingNewCustomer(false);
     setShowMpesaConfirm(false); clearDiscount();
   }
@@ -531,7 +531,9 @@ export default function POSApp({ onLogout, userRole }) {
     if (!clientName) return alert("Please enter or select a client");
     if (cart.length === 0) return alert("Cart is empty");
     if (unassignedServiceItems().length > 0) return alert("Please assign a stylist to every service in the cart");
-    if (payMethod === "M-Pesa") {
+    // STK Push only triggers for Till (Buy Goods) — the automated Daraja flow.
+    // Paybill and Send Money are manual: customer pays, cashier confirms.
+    if (payMethod === "Till" || payMethod === "M-Pesa") {
       setStkPhase("idle");
       setStkCheckoutId(null);
       setStkError("");
@@ -1249,15 +1251,39 @@ export default function POSApp({ onLogout, userRole }) {
                     </button>
                   )}
 
-                  {/* Payment method */}
-                  <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
-                    {["M-Pesa", "Cash"].map(function(m) {
-                      return <button key={m} onClick={function() { setPayMethod(m); }} style={{ flex: 1, border: "2px solid " + (payMethod === m ? GOLD : GOLD_DIM + "66"), borderRadius: 8, padding: "8px 0", background: payMethod === m ? "linear-gradient(135deg," + BLACK + ",#2C1F00)" : WHITE, color: payMethod === m ? GOLD_LT : DARK, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>{m === "M-Pesa" ? "📱 M-Pesa" : "💵 Cash"}</button>;
-                    })}
-                  </div>
-                  {payMethod === "M-Pesa" && <div style={{ marginBottom: 12 }}><MpesaInstructions amount={cartTotal} reference={clientName} compact={true} salon={salon} /></div>}
+                  {/* Payment method — driven by what the salon has enabled in Settings */}
+                  {(function() {
+                    var enabled = (salon && salon.enabled_payment_methods) || ["Cash", "Till"];
+                    // Always include Cash; add configured M-Pesa methods
+                    var methods = ["Cash"].concat(enabled.filter(function(m) { return m !== "Cash"; }));
+                    var icons = { Cash: "💵", Till: "📲", Paybill: "🏦", "Send Money": "📱" };
+                    var labels = { Cash: "Cash", Till: "Buy Goods", Paybill: "Paybill", "Send Money": "Send Money" };
+                    return (
+                      <div style={{ marginBottom: 12 }}>
+                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
+                          {methods.map(function(m) {
+                            return (
+                              <button key={m} onClick={function() { setPayMethod(m); }}
+                                style={{ flex: 1, minWidth: 70, border: "2px solid " + (payMethod === m ? GOLD : GOLD_DIM + "66"), borderRadius: 8, padding: "8px 4px", background: payMethod === m ? "linear-gradient(135deg," + BLACK + ",#2C1F00)" : WHITE, color: payMethod === m ? GOLD_LT : DARK, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                                {icons[m] || "💳"} {labels[m] || m}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        {payMethod !== "Cash" && (
+                          <MpesaInstructions
+                            amount={cartTotal}
+                            reference={clientName}
+                            compact={true}
+                            salon={salon}
+                            variant={payMethod}
+                          />
+                        )}
+                      </div>
+                    );
+                  })()}
                   <GoldBtn onClick={checkout} style={{ width: "100%" }}>
-                    {payMethod === "M-Pesa" ? "📱 Collect M-Pesa · " + fmt(cartTotal) : "✓ Complete Sale · " + fmt(cartTotal)}
+                    {payMethod === "Cash" ? "✓ Complete Sale · " + fmt(cartTotal) : "📱 Collect Payment · " + fmt(cartTotal)}
                   </GoldBtn>
                 </div>
               </div>

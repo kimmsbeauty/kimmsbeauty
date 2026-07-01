@@ -102,6 +102,10 @@ export function SalonGate({ mode, children }) {
               mpesa_till:           settingsRows[0].mpesa_till,
               mpesa_name:           settingsRows[0].mpesa_name,
               contact_phone:        settingsRows[0].contact_phone,
+              mpesa_paybill:        settingsRows[0].mpesa_paybill,
+              mpesa_account:        settingsRows[0].mpesa_account,
+              mpesa_send_money_phone: settingsRows[0].mpesa_send_money_phone,
+              enabled_payment_methods: settingsRows[0].enabled_payment_methods || ["Cash", "Till"],
               // subscription fields already on resolvedSalon from public_salon_directory
               // — preserve them explicitly so they aren't lost in the merge
               subscription_plan:       resolvedSalon.subscription_plan,
