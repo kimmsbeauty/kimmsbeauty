@@ -10,6 +10,26 @@ import { fmt } from "../lib/utils";
 export default function MpesaPaymentModal({ salon, booking, onPaid, onPayLater }) {
   const [confirmed, setConfirmed] = useState(false);
 
+  // Auto-detect which payment variant this salon has configured,
+  // using the same priority order as their enabled_payment_methods.
+  // STK Push infrastructure is preserved — this just picks the right
+  // manual payment variant to display in the instructions.
+  const enabledMethods = (salon && salon.enabled_payment_methods) || ["Cash", "Till"];
+  var variant = "Till"; // default
+  if (enabledMethods.includes("Till") && salon && salon.mpesa_till) {
+    variant = "Till";
+  } else if (enabledMethods.includes("Paybill") && salon && salon.mpesa_paybill) {
+    variant = "Paybill";
+  } else if (enabledMethods.includes("SendMoney") && salon && salon.mpesa_send_money_phone) {
+    variant = "Send Money";
+  }
+
+  // If the salon has no M-Pesa method configured at all, don't show
+  // payment instructions — just show the pay-later option.
+  const hasMpesa = (variant === "Till" && salon && salon.mpesa_till) ||
+                   (variant === "Paybill" && salon && salon.mpesa_paybill) ||
+                   (variant === "Send Money" && salon && salon.mpesa_send_money_phone);
+
   if (confirmed) {
     return (
       <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
@@ -38,7 +58,7 @@ export default function MpesaPaymentModal({ salon, booking, onPaid, onPayLater }
           <div style={{ fontWeight: 800, color: DARK, marginBottom: 4 }}>{booking.service}</div>
           <div style={{ color: "#888" }}>📅 {booking.date} at {booking.time} · {booking.stylist}</div>
         </div>
-        <MpesaInstructions amount={booking.price} reference={booking.name} salon={salon} />
+        {hasMpesa && <MpesaInstructions amount={booking.price} reference={booking.name} salon={salon} variant={variant} />}
         <div style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 10 }}>
           <button
             onClick={() => setConfirmed(true)}

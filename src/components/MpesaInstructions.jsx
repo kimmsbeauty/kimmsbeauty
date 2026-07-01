@@ -1,7 +1,7 @@
 // src/components/MpesaInstructions.jsx
 // Handles three M-Pesa payment variants: Till (Buy Goods), Paybill, Send Money.
 
-import { MPESA_TILL, MPESA_NAME, MPESA_GREEN, WHITE, DARK } from "../lib/constants";
+import { MPESA_GREEN, WHITE, DARK } from "../lib/constants";
 import { fmt } from "../lib/utils";
 
 function buildSteps(variant, config, amount, reference) {
@@ -38,8 +38,10 @@ function buildSteps(variant, config, amount, reference) {
 }
 
 export default function MpesaInstructions({ amount, reference, compact = false, salon, variant = "Till" }) {
-  var till           = (salon && salon.mpesa_till)             || MPESA_TILL;
-  var name           = (salon && salon.mpesa_name)             || MPESA_NAME;
+  // No hardcoded fallbacks — if a salon hasn't configured a payment method,
+  // show nothing rather than defaulting to another salon's details.
+  var till           = (salon && salon.mpesa_till)             || "";
+  var name           = (salon && salon.mpesa_name)             || "";
   var paybill        = (salon && salon.mpesa_paybill)          || "";
   var account        = (salon && salon.mpesa_account)          || "";
   var sendMoneyPhone = (salon && salon.mpesa_send_money_phone) || "";
