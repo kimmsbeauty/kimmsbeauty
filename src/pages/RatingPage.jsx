@@ -5,7 +5,7 @@ import { useParams } from "react-router-dom";
 import SalonBrandmark from "../components/SalonBrandmark";
 import GoldBtn from "../components/GoldBtn";
 import { db } from "../lib/db.js";
-import { today, nowTime } from "../lib/utils.js";
+import { todayStr, nowTime } from "../lib/utils.js";
 import { BLACK, GOLD, DARK, WHITE } from "../lib/constants.js";
 import { lighten, darken } from "../lib/colorUtils";
 import { useSalon, fetchPublicSalonBranding } from "../lib/SalonContext";
@@ -78,14 +78,20 @@ export default function RatingPage() {
     if (rating === 0) return alert("Please select a star rating");
     setSubmitting(true);
     try {
-      await db("POST", "feedback", {
+      var saved = await db("POST", "feedback", {
         rating: rating,
         note: note,
         client: sale ? sale.client : null,
         feedback_token: token,
-        date: today(),
+        date: todayStr(),
         time: nowTime(),
       });
+      // db() fails soft (returns null) rather than throwing, so without this
+      // check a failed write would still show "Thank you!" to the customer.
+      if (!saved) {
+        alert("Something went wrong submitting your feedback. Please try again.");
+        return;
+      }
       setDone(true);
     } catch (e) {
       console.error("Feedback submit error:", e);

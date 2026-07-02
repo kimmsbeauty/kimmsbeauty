@@ -3,7 +3,7 @@
 import { useState } from "react";
 import GoldBtn from "./GoldBtn";
 import { WHITE, DARK, GOLD_LT, GOLD_DIM, BLACK, RED } from "../lib/constants";
-import { today, nowTime } from "../lib/utils";
+import { todayStr, nowTime } from "../lib/utils";
 
 export default function FeedbackModal({ onSubmit, onClose, staffList = [] }) {
   const [rating, setRating] = useState(0);
@@ -48,7 +48,7 @@ export default function FeedbackModal({ onSubmit, onClose, staffList = [] }) {
         <GoldBtn
           onClick={() => {
             if (rating === 0) return alert("Please select a star rating");
-            onSubmit({ rating, stylist, note, date: today(), time: nowTime() });
+            onSubmit({ rating, stylist, note, date: todayStr(), time: nowTime() });
           }}
           style={{ width: "100%", marginTop: 14 }}
         >

@@ -177,7 +177,7 @@ export default function POSApp({ onLogout, userRole }) {
         var results = await Promise.all([
           db("GET", "sales",     null, "?order=created_at.desc&limit=100"),
           db("GET", "stock",     null, "?limit=50"),
-          db("GET", "feedback",  null, "?order=created_at.desc&limit=50"),
+          db("GET", "feedback",  null, "?order=date.desc,time.desc&limit=50"),
           db("GET", "customers", null, "?order=created_at.desc&limit=200"),
           db("GET", "staff",     null, "?active=eq.true&order=created_at.asc"),
           db("GET", "services",  null, "?active=eq.true&order=cat.asc,name.asc"),
@@ -246,7 +246,7 @@ export default function POSApp({ onLogout, userRole }) {
 
   async function submitInPersonFeedback(data) {
     if (!receipt) return;
-    await db("POST", "feedback", {
+    var saved = await db("POST", "feedback", {
       rating:         data.rating,
       note:           data.note || null,
       stylist:        data.stylist || null,
@@ -255,6 +255,13 @@ export default function POSApp({ onLogout, userRole }) {
       date:           data.date,
       time:           data.time,
     });
+    if (!saved) {
+      // db() fails soft (returns null) rather than throwing, so this check
+      // is the only thing standing between a failed write and a false
+      // "sent!" notice — don't remove it even if it looks redundant.
+      alert("Couldn't save this feedback right now. Please try again.");
+      return;
+    }
     setFeedbacks(function(prev) {
       return [{ rating: data.rating, note: data.note, stylist: data.stylist, client: receipt.client, date: data.date, time: data.time }].concat(prev);
     });
