@@ -470,8 +470,15 @@ export default function POSApp({ onLogout, userRole }) {
   // Generates a short, random, unguessable token for the public feedback
   // rating link — e.g. "a3f9k2m8x1". Not a sequential ID, so customers
   // can't guess at other customers' sale links.
+  // Uses crypto.getRandomValues rather than Math.random() — Math.random()
+  // is fine for avoiding accidental collisions but isn't designed to
+  // resist someone deliberately guessing/enumerating tokens, and this
+  // token is the only thing standing between a stranger and another
+  // customer's feedback link.
   function generateFeedbackToken() {
-    return Math.random().toString(36).slice(2, 8) + Math.random().toString(36).slice(2, 8);
+    var bytes = new Uint8Array(12);
+    window.crypto.getRandomValues(bytes);
+    return Array.from(bytes).map(function(b) { return b.toString(16).padStart(2, "0"); }).join("");
   }
 
   // Isolated on purpose: this is the ONLY function that needs to change

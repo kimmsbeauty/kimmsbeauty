@@ -25,6 +25,7 @@ unless you are setting up a new Supabase project.
 | `006_pin_security_bcrypt.sql` | 2026-06-30 | Upgrade PIN hashing from MD5 to bcrypt |
 | `007_audit_log.sql` | 2026-06-30 | Super Admin audit trail table + RPCs |
 | `008_super_admin_update_salon.sql` | 2026-06-30 | Super Admin can edit salon details directly |
+| `009_feedback_unique_token.sql` | pending | **NOT YET RUN.** Unique constraint on `feedback.feedback_token` to block duplicate/spam feedback submissions. Paste into SQL Editor and run once. |
 
 ## RPCs in supabase/sql/ (also already run)
 
